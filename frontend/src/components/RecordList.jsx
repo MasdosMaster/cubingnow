@@ -1,3 +1,5 @@
+import { formatDetectedAge } from "../utils/formatDetectedAge";
+
 function flag(code) {
   return code.toUpperCase().replace(/./g, (character) =>
     String.fromCodePoint(127397 + character.charCodeAt())
@@ -17,9 +19,11 @@ export function RecordList({ records }) {
           <div><strong>{record.event_name}</strong><small>{record.result_kind}</small></div>
           <strong className="result">{record.display_value}</strong>
           <div><strong>{record.competition.name}</strong><small>{record.competition.city}</small></div>
+          <time className="detected-age" dateTime={record.detected_at} title={new Date(record.detected_at).toLocaleString()}>
+            {formatDetectedAge(record.detected_at)}
+          </time>
         </article>
       ))}
     </div>
   );
 }
-
