@@ -1,0 +1,41 @@
+[project]
+name = "cuberecord-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "Django>=5.2,<5.3",
+  "djangorestframework>=3.16,<3.17",
+  "django-cors-headers>=4.7,<5",
+  "dj-database-url>=3,<4",
+  "psycopg[binary]>=3.2,<4",
+  "httpx>=0.28,<1",
+  "gql[httpx,websockets]>=4,<5",
+  "gunicorn>=23,<24",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "pytest-django>=4.11,<5",
+  "ruff>=0.12,<1",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["**/migrations/*.py"]
+
+[tool.ruff.lint]
+ignore = ["RUF012"]
+
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = []
