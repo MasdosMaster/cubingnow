@@ -25,3 +25,10 @@ export async function getRecentRecords({ source, level = "", query = "" }) {
 export async function getIngestionStatus() {
   return getJson("/ingestion-status/");
 }
+
+export async function getWeekendCompetitors({ continent = "" } = {}) {
+  const params = new URLSearchParams();
+  if (continent) params.set("continent", continent);
+  const query = params.toString();
+  return getJson(`/competing-this-weekend/${query ? `?${query}` : ""}`);
+}

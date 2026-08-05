@@ -11,6 +11,8 @@ dependencies = [
   "httpx>=0.28,<1",
   "gql[httpx,websockets]>=4,<5",
   "gunicorn>=23,<24",
+  "beautifulsoup4>=4.13,<5",
+  "pycountry>=24.6,<27",
 ]
 
 [project.optional-dependencies]

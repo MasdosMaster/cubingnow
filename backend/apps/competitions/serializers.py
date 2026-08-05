@@ -7,6 +7,7 @@ class CompetitionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Competition
         fields = [
+            "source_key",
             "wca_id",
             "name",
             "country_code",
@@ -15,4 +16,3 @@ class CompetitionSerializer(serializers.ModelSerializer):
             "end_date",
             "timezone",
         ]
-

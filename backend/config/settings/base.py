@@ -98,6 +98,17 @@ WCA_RETRY_BASE_SECONDS = float(os.getenv("WCA_RETRY_BASE_SECONDS", "1"))
 WCA_RETRY_MAX_SECONDS = float(os.getenv("WCA_RETRY_MAX_SECONDS", "60"))
 WCA_RETRY_MAX_ATTEMPTS = int(os.getenv("WCA_RETRY_MAX_ATTEMPTS", "5"))
 
+# Public accepted-registration synchronization. This is deliberately separate
+# from the fixed WCA Live verification window above.
+ATTENDANCE_WINDOW_TIME_ZONE = os.getenv(
+    "ATTENDANCE_WINDOW_TIME_ZONE", "Europe/Amsterdam"
+)
+ATTENDANCE_SYNC_STALE_HOURS = int(os.getenv("ATTENDANCE_SYNC_STALE_HOURS", "12"))
+WCA_PUBLIC_BASE_URL = os.getenv(
+    "WCA_PUBLIC_BASE_URL", "https://www.worldcubeassociation.org"
+)
+CUBINGCHINA_BASE_URL = os.getenv("CUBINGCHINA_BASE_URL", "https://cubing.com")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -119,6 +130,11 @@ LOGGING = {
             "propagate": False,
         },
         "apps.records.management.commands": {
+            "handlers": ["console"],
+            "level": os.getenv("CUBINGNOW_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "apps.competitors": {
             "handlers": ["console"],
             "level": os.getenv("CUBINGNOW_LOG_LEVEL", "INFO"),
             "propagate": False,

@@ -15,6 +15,9 @@ def api_root(request):
                 "ingestion_status": request.build_absolute_uri("ingestion-status/"),
                 "competitions": request.build_absolute_uri("competitions/"),
                 "competitors": request.build_absolute_uri("competitors/"),
+                "competing_this_weekend": request.build_absolute_uri(
+                    "competing-this-weekend/"
+                ),
             },
         }
     )

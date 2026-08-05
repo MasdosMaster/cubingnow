@@ -72,6 +72,18 @@ python backend/manage.py run_wca_live_subscriptions \
   --start 2026-08-06 --end 2026-08-10
 ```
 
+Synchronize the public WCA and CubingChina accepted-registration lists for the current
+Wednesday-through-Tuesday attendance window with:
+
+```bash
+python backend/manage.py sync_weekend_attendance
+```
+
+The production Blueprint runs this idempotent command every six hours. Collection happens before
+the database transaction: if any selected source page fails, existing accepted attendance is left
+unchanged. See [Weekend attendance](docs/weekend-attendance.md) for the source contracts, API,
+date semantics, and operating details.
+
 The website reads the two database collections independently. It never owns a WCA Live
 subscription. See [Weekend record verification](docs/weekend-record-verification.md) for the
 verified protocol, initial snapshot policy, environment variables, logs, health checks, tests,
@@ -85,12 +97,13 @@ Python dependencies are declared in `backend/pyproject.toml` and resolved exactl
 
 ## Deploying to Render
 
-The root `render.yaml` defines five Render resources:
+The root `render.yaml` defines six Render resources:
 
 - `cubingnow-web`: React static site at `cubingnow.com`
 - `cubingnow-api`: Django API at `api.cubingnow.com`
 - `cubingnow-api-poller`: continuous WCA Live recent-record poller
 - `cubingnow-subscription-worker`: continuous WCA Live round subscription supervisor
+- `cubingnow-weekend-attendance-sync`: six-hourly public registration synchronization
 - `cubingnow-db`: PostgreSQL database
 
 After pushing this repository to GitHub, create a new Blueprint in Render and connect the repository. Render reads `render.yaml`, generates the Django secret, connects both Python services to PostgreSQL, and builds the frontend with the production API URL.

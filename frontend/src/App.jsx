@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { getIngestionStatus, getRecentRecords } from "./api/client";
+import { getIngestionStatus, getRecentRecords, getWeekendCompetitors } from "./api/client";
 import { RecordList } from "./components/RecordList";
+import { WeekendCompetitorList } from "./components/WeekendCompetitorList";
 import "./styles.css";
 
 const levels = ["", "WR", "CR", "NR"];
@@ -33,13 +34,42 @@ function usePipelineRecords(source, level, query) {
   return state;
 }
 
+function useWeekendCompetitors(continent) {
+  const [state, setState] = useState({ payload: null, loading: true, error: "" });
+
+  useEffect(() => {
+    let current = true;
+    const refresh = async (showLoading = false) => {
+      if (showLoading) setState((previous) => ({ ...previous, loading: true }));
+      try {
+        const payload = await getWeekendCompetitors({ continent });
+        if (current) setState({ payload, loading: false, error: "" });
+      } catch (reason) {
+        if (current) {
+          setState((previous) => ({ ...previous, loading: false, error: reason.message }));
+        }
+      }
+    };
+    refresh(true);
+    const interval = window.setInterval(() => refresh(false), REFRESH_INTERVAL_MS);
+    return () => {
+      current = false;
+      window.clearInterval(interval);
+    };
+  }, [continent]);
+
+  return state;
+}
+
 export default function App() {
   const [level, setLevel] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState(null);
   const [statusError, setStatusError] = useState("");
+  const [continent, setContinent] = useState("");
   const api = usePipelineRecords("api_polling", level, query);
   const subscriptions = usePipelineRecords("graphql_subscription", level, query);
+  const weekendCompetitors = useWeekendCompetitors(continent);
 
   useEffect(() => {
     let current = true;
@@ -89,6 +119,11 @@ export default function App() {
           subtitle="WCA Live recentRecords query"
           {...api}
           worker={status?.api_polling}
+        />
+        <WeekendCompetitorList
+          {...weekendCompetitors}
+          continent={continent}
+          onContinentChange={setContinent}
         />
       </main>
       <footer><span>CubingNow</span><span>Unofficial observational companion to WCA Live</span></footer>

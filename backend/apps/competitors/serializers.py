@@ -10,7 +10,7 @@ class CompetitorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Competitor
-        fields = ["wca_id", "name", "country_code", "featured"]
+        fields = ["wca_id", "name", "country_code", "continent", "featured"]
 
 
 class AttendanceSerializer(serializers.ModelSerializer):
@@ -19,5 +19,11 @@ class AttendanceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Attendance
-        fields = ["id", "competitor", "competition", "observed_at", "is_accepted"]
-
+        fields = [
+            "id",
+            "competitor",
+            "competition",
+            "observed_at",
+            "is_accepted",
+            "sources",
+        ]

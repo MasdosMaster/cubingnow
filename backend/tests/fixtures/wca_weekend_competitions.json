@@ -1,0 +1,29 @@
+[
+  {
+    "id": "TestOpen2026",
+    "name": "Test Open 2026",
+    "start_date": "2026-08-05",
+    "end_date": "2026-08-06",
+    "country_iso2": "NL",
+    "city": "Utrecht",
+    "url": "https://www.worldcubeassociation.org/competitions/TestOpen2026"
+  },
+  {
+    "id": "ChinaOpen2026",
+    "name": "China Open 2026",
+    "start_date": "2026-08-09",
+    "end_date": "2026-08-09",
+    "country_iso2": "CN",
+    "city": "Shanghai",
+    "url": "https://www.worldcubeassociation.org/competitions/ChinaOpen2026"
+  },
+  {
+    "id": "OutsideOpen2026",
+    "name": "Outside Open 2026",
+    "start_date": "2026-08-12",
+    "end_date": "2026-08-12",
+    "country_iso2": "DE",
+    "city": "Berlin",
+    "url": "https://www.worldcubeassociation.org/competitions/OutsideOpen2026"
+  }
+]

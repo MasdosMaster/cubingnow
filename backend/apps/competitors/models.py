@@ -4,9 +4,18 @@ from apps.competitions.models import Competition
 
 
 class Competitor(models.Model):
+    class Continent(models.TextChoices):
+        AFRICA = "Africa", "Africa"
+        ASIA = "Asia", "Asia"
+        EUROPE = "Europe", "Europe"
+        NORTH_AMERICA = "North America", "North America"
+        SOUTH_AMERICA = "South America", "South America"
+        OCEANIA = "Oceania", "Oceania"
+
     wca_id = models.CharField(max_length=10, unique=True)
     name = models.CharField(max_length=255)
     country_code = models.CharField(max_length=2)
+    continent = models.CharField(max_length=20, choices=Continent.choices, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -30,6 +39,7 @@ class Attendance(models.Model):
     )
     observed_at = models.DateTimeField()
     is_accepted = models.BooleanField(default=True)
+    sources = models.JSONField(default=list, blank=True)
 
     class Meta:
         constraints = [
@@ -38,3 +48,20 @@ class Attendance(models.Model):
             )
         ]
 
+
+class AttendanceSyncRun(models.Model):
+    class Status(models.TextChoices):
+        RUNNING = "running", "Running"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+
+    window_start = models.DateField()
+    window_end = models.DateField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.RUNNING)
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    error = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]

@@ -1,0 +1,26 @@
+[
+  {
+    "user": {
+      "wca_id": "2020ALPH01",
+      "name": "Álice Alpha",
+      "country_iso2": "NL",
+      "country": {"iso2": "NL", "continent_id": "_Europe"}
+    }
+  },
+  {
+    "user": {
+      "wca_id": "2019ZETA01",
+      "name": "Zoë Zeta",
+      "country_iso2": "US",
+      "country": {"iso2": "US", "continent_id": "_North America"}
+    }
+  },
+  {
+    "user": {
+      "wca_id": null,
+      "name": "Brand New Cuber",
+      "country_iso2": "NL",
+      "country": {"iso2": "NL", "continent_id": "_Europe"}
+    }
+  }
+]

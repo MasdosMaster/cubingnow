@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import RedirectView
 
+from apps.competitors.views import competing_this_weekend
+
 urlpatterns = [
     path("", RedirectView.as_view(url="/api/", permanent=False)),
     path("admin/", admin.site.urls),
@@ -11,4 +13,5 @@ urlpatterns = [
     path("api/ingestion-status/", include("apps.records.status_urls")),
     path("api/competitions/", include("apps.competitions.urls")),
     path("api/competitors/", include("apps.competitors.urls")),
+    path("api/competing-this-weekend/", competing_this_weekend),
 ]

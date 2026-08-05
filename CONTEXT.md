@@ -19,12 +19,12 @@ _Avoid_: Record time, creation time
 A competitor included in CubingNow's manually curated set, identified by WCA ID, whose attendance at upcoming competitions is highlighted.
 _Avoid_: Celebrity cuber, elite cuber
 
-**Competition Week**:
-The Tuesday-through-Monday local-date window used throughout CubeRecord to group Records, competitions, and Attendance. Items transition according to the associated competition's local calendar.
-_Avoid_: Weekend
+**Attendance Window**:
+The inclusive Wednesday-through-Tuesday local-date window used by the “Competing this weekend” feature. The window is calculated in the configured attendance timezone. The separate WCA Live verification experiment retains its independently configured collection dates.
+_Avoid_: Calendar week
 
 **Attendance**:
-A Featured Competitor's presence on a competition's public accepted competitor list. CubeRecord presents Attendance directly without implying guaranteed physical participation.
+A returning competitor's presence on a competition's public accepted competitor list. Returning competitors have a WCA ID; first-time competitors are intentionally excluded. CubeRecord presents Attendance directly without implying guaranteed physical participation.
 _Avoid_: Confirmed attendance
 
 **Result Value**:
