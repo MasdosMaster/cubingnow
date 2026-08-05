@@ -11,6 +11,8 @@ def api_root(request):
             "version": "v1",
             "endpoints": {
                 "records": request.build_absolute_uri("records/"),
+                "recent_records": request.build_absolute_uri("recent-records/"),
+                "ingestion_status": request.build_absolute_uri("ingestion-status/"),
                 "competitions": request.build_absolute_uri("competitions/"),
                 "competitors": request.build_absolute_uri("competitors/"),
             },

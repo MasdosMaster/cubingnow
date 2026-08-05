@@ -33,13 +33,13 @@ services:
         value: https://cubingnow.com,https://www.cubingnow.com
 
   - type: worker
-    name: cubingnow-collector
+    name: cubingnow-api-poller
     runtime: python
     plan: starter
     region: frankfurt
     rootDir: backend
     buildCommand: uv sync --frozen --no-dev
-    startCommand: until uv run python manage.py migrate --check; do sleep 5; done; uv run python manage.py sync_recent_records --watch --interval 60
+    startCommand: until uv run python manage.py migrate --check; do sleep 5; done; uv run python manage.py run_wca_live_api_polling
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: config.settings.production
@@ -51,6 +51,38 @@ services:
           property: connectionString
       - key: DJANGO_ALLOWED_HOSTS
         value: api.cubingnow.com
+      - key: WCA_API_POLL_INTERVAL_SECONDS
+        value: "60"
+
+  - type: worker
+    name: cubingnow-subscription-worker
+    runtime: python
+    plan: starter
+    region: frankfurt
+    rootDir: backend
+    buildCommand: uv sync --frozen --no-dev
+    startCommand: until uv run python manage.py migrate --check; do sleep 5; done; uv run python manage.py run_wca_live_subscriptions
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cubingnow-db
+          property: connectionString
+      - key: DJANGO_ALLOWED_HOSTS
+        value: api.cubingnow.com
+      - key: WCA_WEEKEND_START
+        value: 2026-08-06
+      - key: WCA_WEEKEND_END
+        value: 2026-08-10
+      - key: WCA_COMPETITION_LOOKBACK_DAYS
+        value: "7"
+      - key: WCA_ROUND_DISCOVERY_INTERVAL_SECONDS
+        value: "900"
+      - key: WCA_SUBSCRIPTION_CATCHUP_MINUTES
+        value: "60"
 
   - type: web
     name: cubingnow-web

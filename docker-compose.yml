@@ -21,6 +21,10 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.development
       DATABASE_URL: postgresql://cuberecord:cuberecord@database:5432/cuberecord
+      WCA_WEEKEND_START: ${WCA_WEEKEND_START:-2026-08-06}
+      WCA_WEEKEND_END: ${WCA_WEEKEND_END:-2026-08-10}
+      WCA_COMPETITION_LOOKBACK_DAYS: ${WCA_COMPETITION_LOOKBACK_DAYS:-7}
+      WCA_SUBSCRIPTION_CATCHUP_MINUTES: ${WCA_SUBSCRIPTION_CATCHUP_MINUTES:-60}
     volumes:
       - ./backend:/app
     ports:
@@ -34,12 +38,33 @@ services:
       timeout: 5s
       retries: 10
 
-  collector:
+  api-poller:
     build: ./backend
-    command: python manage.py sync_recent_records --watch --interval 60
+    command: python manage.py run_wca_live_api_polling
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.development
       DATABASE_URL: postgresql://cuberecord:cuberecord@database:5432/cuberecord
+      WCA_LIVE_API_URL: ${WCA_LIVE_API_URL:-https://live.worldcubeassociation.org/api}
+      WCA_API_POLL_INTERVAL_SECONDS: ${WCA_API_POLL_INTERVAL_SECONDS:-60}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  subscription-worker:
+    build: ./backend
+    command: python manage.py run_wca_live_subscriptions
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DATABASE_URL: postgresql://cuberecord:cuberecord@database:5432/cuberecord
+      WCA_LIVE_API_URL: ${WCA_LIVE_API_URL:-https://live.worldcubeassociation.org/api}
+      WCA_LIVE_WS_URL: ${WCA_LIVE_WS_URL:-wss://live.worldcubeassociation.org/socket/websocket}
+      WCA_WEEKEND_START: ${WCA_WEEKEND_START:-2026-08-06}
+      WCA_WEEKEND_END: ${WCA_WEEKEND_END:-2026-08-10}
+      WCA_COMPETITION_LOOKBACK_DAYS: ${WCA_COMPETITION_LOOKBACK_DAYS:-7}
+      WCA_ROUND_DISCOVERY_INTERVAL_SECONDS: ${WCA_ROUND_DISCOVERY_INTERVAL_SECONDS:-900}
+      WCA_SUBSCRIPTION_CATCHUP_MINUTES: ${WCA_SUBSCRIPTION_CATCHUP_MINUTES:-60}
     volumes:
       - ./backend:/app
     depends_on:

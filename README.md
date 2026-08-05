@@ -5,7 +5,8 @@ CubingNow collects official speedcubing record observations and featured competi
 ## Architecture
 
 - `backend/`: Python 3.12, Django 5.2, Django REST Framework
-- `backend/integrations/wca/`: WCA HTTP, GraphQL, subscription, mapping, and ingestion code
+- `backend/integrations/wca_live/`: WCA Live HTTP, Phoenix/Absinthe subscription,
+  snapshot diffing, mapping, and source-isolated ingestion code
 - `frontend/`: Node.js and React with Vite
 - PostgreSQL: shared persistent store for the API and collection workers
 
@@ -48,7 +49,9 @@ Copy `.env.example` to `.env` and adjust values for your environment. Never comm
 
 ## Data collection processes
 
-The web API and data collector are separate processes sharing PostgreSQL. Docker Compose starts both automatically. The collector polls WCA Live once per minute and stores new observations idempotently.
+The web API and two collectors are separate processes sharing PostgreSQL. Docker Compose starts
+an API poller and a GraphQL subscription worker independently. Their record observations,
+deduplication keys, source payloads, and detection timestamps are isolated by ingestion method.
 
 Run a one-off synchronization manually with:
 
@@ -56,13 +59,23 @@ Run a one-off synchronization manually with:
 python backend/manage.py sync_recent_records
 ```
 
-Or keep it running outside Docker with:
+Or run the API worker outside Docker with:
 
 ```bash
-python backend/manage.py sync_recent_records --watch --interval 60
+python backend/manage.py run_wca_live_api_polling
 ```
 
-WCA Live's public GraphQL schema exposes `recentRecords`, which is the MVP source. Its `roundUpdated` subscription requires an individual round id, so subscriptions are reserved for a later optimization and are not required for reliable record collection.
+Run the subscription worker with:
+
+```bash
+python backend/manage.py run_wca_live_subscriptions \
+  --start 2026-08-06 --end 2026-08-10
+```
+
+The website reads the two database collections independently. It never owns a WCA Live
+subscription. See [Weekend record verification](docs/weekend-record-verification.md) for the
+verified protocol, initial snapshot policy, environment variables, logs, health checks, tests,
+and the operating checklist.
 
 ## Production data
 
@@ -72,16 +85,17 @@ Python dependencies are declared in `backend/pyproject.toml` and resolved exactl
 
 ## Deploying to Render
 
-The root `render.yaml` defines four Render resources:
+The root `render.yaml` defines five Render resources:
 
 - `cubingnow-web`: React static site at `cubingnow.com`
 - `cubingnow-api`: Django API at `api.cubingnow.com`
-- `cubingnow-collector`: continuous WCA record collector
+- `cubingnow-api-poller`: continuous WCA Live recent-record poller
+- `cubingnow-subscription-worker`: continuous WCA Live round subscription supervisor
 - `cubingnow-db`: PostgreSQL database
 
 After pushing this repository to GitHub, create a new Blueprint in Render and connect the repository. Render reads `render.yaml`, generates the Django secret, connects both Python services to PostgreSQL, and builds the frontend with the production API URL.
 
-The collector is a paid Starter background worker because Render does not provide free background workers. Before using the free PostgreSQL plan for anything important, review its retention and backup limitations in the Render dashboard.
+The two collectors are paid Starter background workers because Render does not provide free background workers. Before using the free PostgreSQL plan for anything important, review its retention and backup limitations in the Render dashboard.
 
 Add `cubingnow.com` to the static site and `api.cubingnow.com` to the API service, then copy Render's requested DNS records to the DNS provider for `CubingNow.com`. Render provisions HTTPS automatically after domain verification.
 

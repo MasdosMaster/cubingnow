@@ -1,0 +1,21 @@
+{
+  "id": "round-1",
+  "results": [
+    {
+      "id": "result-1",
+      "ranking": 1,
+      "attempts": [{"result": 600}, {"result": 620}, {"result": 610}],
+      "best": 600,
+      "average": 610,
+      "singleRecordTag": null,
+      "averageRecordTag": null,
+      "enteredAt": "2026-08-05T08:00:00Z",
+      "person": {
+        "id": "person-1",
+        "wcaId": "2020TEST01",
+        "name": "Fixture Cuber",
+        "country": {"iso2": "NL"}
+      }
+    }
+  ]
+}

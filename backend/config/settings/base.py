@@ -77,3 +77,51 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 50,
 }
 
+# WCA Live observational record-ingestion experiment. Dates are deliberately
+# centralized here and can be overridden without changing code or containers.
+WCA_LIVE_API_URL = os.getenv(
+    "WCA_LIVE_API_URL",
+    os.getenv("WCA_LIVE_GRAPHQL_URL", "https://live.worldcubeassociation.org/api"),
+)
+WCA_LIVE_WS_URL = os.getenv(
+    "WCA_LIVE_WS_URL", "wss://live.worldcubeassociation.org/socket/websocket"
+)
+WCA_WEEKEND_START = os.getenv("WCA_WEEKEND_START", "2026-08-06")
+WCA_WEEKEND_END = os.getenv("WCA_WEEKEND_END", "2026-08-10")
+WCA_COMPETITION_LOOKBACK_DAYS = int(os.getenv("WCA_COMPETITION_LOOKBACK_DAYS", "7"))
+WCA_API_POLL_INTERVAL_SECONDS = int(os.getenv("WCA_API_POLL_INTERVAL_SECONDS", "60"))
+WCA_ROUND_DISCOVERY_INTERVAL_SECONDS = int(
+    os.getenv("WCA_ROUND_DISCOVERY_INTERVAL_SECONDS", "900")
+)
+WCA_SUBSCRIPTION_CATCHUP_MINUTES = int(os.getenv("WCA_SUBSCRIPTION_CATCHUP_MINUTES", "60"))
+WCA_RETRY_BASE_SECONDS = float(os.getenv("WCA_RETRY_BASE_SECONDS", "1"))
+WCA_RETRY_MAX_SECONDS = float(os.getenv("WCA_RETRY_MAX_SECONDS", "60"))
+WCA_RETRY_MAX_ATTEMPTS = int(os.getenv("WCA_RETRY_MAX_ATTEMPTS", "5"))
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "worker": {
+            "format": "%(asctime)s level=%(levelname)s logger=%(name)s %(message)s",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "worker",
+        }
+    },
+    "loggers": {
+        "integrations.wca_live": {
+            "handlers": ["console"],
+            "level": os.getenv("CUBINGNOW_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "apps.records.management.commands": {
+            "handlers": ["console"],
+            "level": os.getenv("CUBINGNOW_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+    },
+}

@@ -1,7 +1,7 @@
 import httpx
 
 
-class WCAApiClient:
+class WCAAPIClient:
     def __init__(self, base_url: str, timeout: float = 30.0):
         self._client = httpx.Client(base_url=base_url, timeout=timeout)
 
@@ -18,4 +18,3 @@ class WCAApiClient:
 
     def __exit__(self, *_):
         self.close()
-

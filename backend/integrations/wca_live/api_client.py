@@ -1,9 +1,9 @@
 import httpx
 
-from .exceptions import WCAIntegrationError
+from .exceptions import WCALiveIntegrationError
 
 
-class WCALiveGraphQLClient:
+class WCALiveAPIClient:
     def __init__(self, endpoint: str, timeout: float = 30.0):
         self.endpoint = endpoint
         self.timeout = timeout
@@ -17,6 +17,5 @@ class WCALiveGraphQLClient:
         response.raise_for_status()
         payload = response.json()
         if payload.get("errors"):
-            raise WCAIntegrationError(f"WCA Live GraphQL errors: {payload['errors']}")
+            raise WCALiveIntegrationError(f"WCA Live GraphQL errors: {payload['errors']}")
         return payload.get("data", {})
-

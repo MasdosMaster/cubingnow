@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getRecords } from "./client";
+import { getRecentRecords, getRecords } from "./client";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -14,5 +14,20 @@ describe("getRecords", () => {
 
     await expect(getRecords({ level: "WR" })).resolves.toEqual(records);
     expect(fetch).toHaveBeenCalledWith("/api/records/?level=WR");
+  });
+
+  it("fetches one ingestion pipeline explicitly", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ count: 0, results: [] })
+    }));
+
+    await expect(getRecentRecords({
+      source: "graphql_subscription",
+      level: "WR"
+    })).resolves.toEqual([]);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/recent-records/?source=graphql_subscription&level=WR"
+    );
   });
 });

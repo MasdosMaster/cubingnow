@@ -1,2 +1,1 @@
-"""Clients and ingestion services for WCA-owned data sources."""
-
+"""Clients for the main World Cube Association website and API."""
