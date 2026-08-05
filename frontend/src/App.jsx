@@ -78,17 +78,17 @@ export default function App() {
         </nav>
         {statusError && <p className="status-warning">Worker health unavailable: {statusError}</p>}
         <RecordList
-          title="Recent records — API polling"
-          subtitle="WCA Live recentRecords query"
-          {...api}
-          worker={status?.api_polling}
-        />
-        <RecordList
           title="Recent records — GraphQL subscriptions"
           subtitle="Persisted full-round snapshot diffs"
           {...subscriptions}
           worker={status?.graphql_subscription}
           roundStatus={status?.subscription_rounds}
+        />
+        <RecordList
+          title="Recent records — API polling"
+          subtitle="WCA Live recentRecords query"
+          {...api}
+          worker={status?.api_polling}
         />
       </main>
       <footer><span>CubingNow</span><span>Unofficial observational companion to WCA Live</span></footer>
