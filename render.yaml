@@ -84,6 +84,49 @@ services:
       - key: WCA_SUBSCRIPTION_CATCHUP_MINUTES
         value: "60"
 
+  - type: worker
+    name: cubingnow-cubingchina-worker
+    runtime: python
+    plan: starter
+    region: frankfurt
+    rootDir: backend
+    buildCommand: uv sync --frozen --no-dev
+    startCommand: until uv run python manage.py migrate --check; do sleep 5; done; uv run python manage.py run_cubingchina_websocket
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          type: web
+          name: cubingnow-api
+          envVarKey: DJANGO_SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cubingnow-db
+          property: connectionString
+      - key: DJANGO_ALLOWED_HOSTS
+        value: api.cubingnow.com
+      - key: CUBINGCHINA_BASE_URL
+        value: https://cubing.com
+      - key: CUBINGCHINA_WS_URL
+        value: wss://cubing.com/ws
+      - key: CUBINGCHINA_DISCOVERY_INTERVAL_SECONDS
+        value: "900"
+      - key: CUBINGCHINA_LOOKBACK_DAYS
+        value: "1"
+      - key: CUBINGCHINA_LOOKAHEAD_DAYS
+        value: "7"
+      - key: CUBINGCHINA_COMPLETION_GRACE_HOURS
+        value: "12"
+      - key: CUBINGCHINA_MAX_CONNECTIONS
+        value: "10"
+      - key: CUBINGCHINA_RETRY_BASE_SECONDS
+        value: "1"
+      - key: CUBINGCHINA_RETRY_MAX_SECONDS
+        value: "60"
+      - key: CUBINGCHINA_KEEPALIVE_SECONDS
+        value: "55"
+
   - type: cron
     name: cubingnow-weekend-attendance-sync
     runtime: python

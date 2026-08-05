@@ -7,10 +7,13 @@ CubingNow collects official speedcubing record observations and featured competi
 - `backend/`: Python 3.12, Django 5.2, Django REST Framework
 - `backend/integrations/wca_live/`: WCA Live HTTP, Phoenix/Absinthe subscription,
   snapshot diffing, mapping, and source-isolated ingestion code
+- `backend/integrations/cubingchina/`: public competition discovery, attendance scraping,
+  and independent live-results WebSocket collection
 - `frontend/`: Node.js and React with Vite
 - PostgreSQL: shared persistent store for the API and collection workers
 
-The React frontend only calls the CubingNow API. External WCA communication stays in the backend integration boundary.
+The React frontend only calls the CubingNow API. External WCA and CubingChina communication stays
+inside backend integration boundaries.
 
 ## Development with Docker
 
@@ -49,8 +52,9 @@ Copy `.env.example` to `.env` and adjust values for your environment. Never comm
 
 ## Data collection processes
 
-The web API and two collectors are separate processes sharing PostgreSQL. Docker Compose starts
-an API poller and a GraphQL subscription worker independently. Their record observations,
+The web API and three collectors are separate processes sharing PostgreSQL. Docker Compose starts
+an API poller, a GraphQL subscription worker, and a CubingChina live-results worker independently.
+Their record observations,
 deduplication keys, source payloads, and detection timestamps are isolated by ingestion method.
 
 Run a one-off synchronization manually with:
@@ -72,6 +76,16 @@ python backend/manage.py run_wca_live_subscriptions \
   --start 2026-08-06 --end 2026-08-10
 ```
 
+Run the continuously discovering CubingChina worker with:
+
+```bash
+python backend/manage.py run_cubingchina_websocket
+```
+
+It discovers official WCA competitions from CubingChina every 15 minutes, opens one read-only
+socket per currently active competition, fetches every round sequentially, and reconciles full
+snapshots after reconnecting. See [CubingChina live collection](docs/cubingchina-live.md).
+
 Synchronize the public WCA and CubingChina accepted-registration lists for the current
 Wednesday-through-Tuesday attendance window with:
 
@@ -84,7 +98,7 @@ the database transaction: if any selected source page fails, existing accepted a
 unchanged. See [Weekend attendance](docs/weekend-attendance.md) for the source contracts, API,
 date semantics, and operating details.
 
-The website reads the two database collections independently. It never owns a WCA Live
+The website reads the three database collections independently. It never owns an upstream
 subscription. See [Weekend record verification](docs/weekend-record-verification.md) for the
 verified protocol, initial snapshot policy, environment variables, logs, health checks, tests,
 and the operating checklist.
@@ -97,18 +111,19 @@ Python dependencies are declared in `backend/pyproject.toml` and resolved exactl
 
 ## Deploying to Render
 
-The root `render.yaml` defines six Render resources:
+The root `render.yaml` defines seven Render resources:
 
 - `cubingnow-web`: React static site at `cubingnow.com`
 - `cubingnow-api`: Django API at `api.cubingnow.com`
 - `cubingnow-api-poller`: continuous WCA Live recent-record poller
 - `cubingnow-subscription-worker`: continuous WCA Live round subscription supervisor
+- `cubingnow-cubingchina-worker`: continuous CubingChina discovery and live collection
 - `cubingnow-weekend-attendance-sync`: six-hourly public registration synchronization
 - `cubingnow-db`: PostgreSQL database
 
 After pushing this repository to GitHub, create a new Blueprint in Render and connect the repository. Render reads `render.yaml`, generates the Django secret, connects both Python services to PostgreSQL, and builds the frontend with the production API URL.
 
-The two collectors are paid Starter background workers because Render does not provide free background workers. Before using the free PostgreSQL plan for anything important, review its retention and backup limitations in the Render dashboard.
+The three collectors are paid Starter background workers because Render does not provide free background workers. Before using the free PostgreSQL plan for anything important, review its retention and backup limitations in the Render dashboard.
 
 Add `cubingnow.com` to the static site and `api.cubingnow.com` to the API service, then copy Render's requested DNS records to the DNS provider for `CubingNow.com`. Render provisions HTTPS automatically after domain verification.
 

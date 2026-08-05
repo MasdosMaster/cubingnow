@@ -5,14 +5,16 @@ CubingNow presents newly detected official speedcubing records and highlights no
 ## Language
 
 **Record**:
-A WCA Live result marked as a world, continental, or national record, for either a single result or an average. A Record may later be corrected or withdrawn when its source result changes.
+An upstream result marked as a world, continental, or national record, for either a single result
+or an average. A Record may later be corrected or withdrawn when its source result changes.
 
 **Record Level**:
 The single, highest geographic designation assigned to a Record: world (WR), continental (CR), or national (NR). Record Levels are mutually exclusive; a Record never cascades into lower-level categories.
 _Avoid_: Record type
 
 **Detection Time**:
-The moment CubingNow first observes a Record in WCA Live.
+The moment one CubingNow ingestion pipeline first observes a Record in its external source. It is
+not necessarily the solve time, especially when the source supplies no entry timestamp.
 _Avoid_: Record time, creation time
 
 **Featured Competitor**:
@@ -28,7 +30,8 @@ A returning competitor's presence on a competition's public accepted competitor 
 _Avoid_: Confirmed attendance
 
 **Result Value**:
-The integer-encoded result received from WCA Live and preserved without display conversion.
+The integer-encoded result received from an upstream live-results provider and preserved without
+display conversion.
 _Avoid_: Display time
 
 **Display Value**:

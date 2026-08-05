@@ -18,6 +18,7 @@ query CubeRecordRecentRecords {
       }
       round {
         id
+        number
         name
         competitionEvent {
           event { id name }

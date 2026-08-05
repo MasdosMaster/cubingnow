@@ -69,6 +69,7 @@ export default function App() {
   const [continent, setContinent] = useState("");
   const api = usePipelineRecords("api_polling", level, query);
   const subscriptions = usePipelineRecords("graphql_subscription", level, query);
+  const cubingChina = usePipelineRecords("cubingchina_websocket", level, query);
   const weekendCompetitors = useWeekendCompetitors(continent);
 
   useEffect(() => {
@@ -119,6 +120,12 @@ export default function App() {
           subtitle="WCA Live recentRecords query"
           {...api}
           worker={status?.api_polling}
+        />
+        <RecordList
+          title="Recent records — CubingChina live"
+          subtitle="CubingChina competition WebSocket"
+          {...cubingChina}
+          worker={status?.cubingchina_websocket}
         />
         <WeekendCompetitorList
           {...weekendCompetitors}

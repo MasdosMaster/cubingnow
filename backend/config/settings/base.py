@@ -108,6 +108,23 @@ WCA_PUBLIC_BASE_URL = os.getenv(
     "WCA_PUBLIC_BASE_URL", "https://www.worldcubeassociation.org"
 )
 CUBINGCHINA_BASE_URL = os.getenv("CUBINGCHINA_BASE_URL", "https://cubing.com")
+CUBINGCHINA_WS_URL = os.getenv("CUBINGCHINA_WS_URL", "wss://cubing.com/ws")
+CUBINGCHINA_DISCOVERY_INTERVAL_SECONDS = int(
+    os.getenv("CUBINGCHINA_DISCOVERY_INTERVAL_SECONDS", "900")
+)
+CUBINGCHINA_LOOKBACK_DAYS = int(os.getenv("CUBINGCHINA_LOOKBACK_DAYS", "1"))
+CUBINGCHINA_LOOKAHEAD_DAYS = int(os.getenv("CUBINGCHINA_LOOKAHEAD_DAYS", "7"))
+CUBINGCHINA_COMPLETION_GRACE_HOURS = int(
+    os.getenv("CUBINGCHINA_COMPLETION_GRACE_HOURS", "12")
+)
+CUBINGCHINA_MAX_CONNECTIONS = int(os.getenv("CUBINGCHINA_MAX_CONNECTIONS", "10"))
+CUBINGCHINA_RETRY_BASE_SECONDS = float(
+    os.getenv("CUBINGCHINA_RETRY_BASE_SECONDS", "1")
+)
+CUBINGCHINA_RETRY_MAX_SECONDS = float(
+    os.getenv("CUBINGCHINA_RETRY_MAX_SECONDS", "60")
+)
+CUBINGCHINA_KEEPALIVE_SECONDS = float(os.getenv("CUBINGCHINA_KEEPALIVE_SECONDS", "55"))
 
 LOGGING = {
     "version": 1,
@@ -125,6 +142,11 @@ LOGGING = {
     },
     "loggers": {
         "integrations.wca_live": {
+            "handlers": ["console"],
+            "level": os.getenv("CUBINGNOW_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "integrations.cubingchina": {
             "handlers": ["console"],
             "level": os.getenv("CUBINGNOW_LOG_LEVEL", "INFO"),
             "propagate": False,

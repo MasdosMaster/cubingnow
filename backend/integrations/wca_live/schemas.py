@@ -58,6 +58,11 @@ class RecordCandidate:
     source_url: str
     source_update_timestamp: datetime | None
     observed_at: datetime
+    round_number: int | None = None
+    source: str = "wca_live"
+    source_result_id: str = ""
+    source_competition_id: str = ""
+    source_competitor_id: str = ""
 
 
 # Compatibility name used by the existing integration boundary.

@@ -58,6 +58,7 @@ def _candidate(
         competition_start_date=target.competition_start_date,
         competition_end_date=target.competition_end_date,
         round_id=target.round_id,
+        round_number=target.round_number,
         round_name=target.round_name,
         event_id=target.event_id,
         event_name=target.event_name,
@@ -74,6 +75,10 @@ def _candidate(
         ),
         source_update_timestamp=result.entered_at,
         observed_at=observed_at,
+        source="wca_live",
+        source_result_id=result.result_id,
+        source_competition_id=target.wca_live_competition_id,
+        source_competitor_id=result.competitor_wca_live_id,
     )
 
 

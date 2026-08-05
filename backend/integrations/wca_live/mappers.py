@@ -41,6 +41,7 @@ def map_record(payload: dict, observed_at: datetime) -> RecordCandidate:
             competition_start_date=_date(competition["startDate"]),
             competition_end_date=_date(competition["endDate"]),
             round_id=round_id,
+            round_number=round_payload.get("number"),
             round_name=round_payload.get("name") or "",
             event_id=event["id"],
             event_name=event["name"],
@@ -59,6 +60,10 @@ def map_record(payload: dict, observed_at: datetime) -> RecordCandidate:
             ),
             source_update_timestamp=_datetime(result.get("enteredAt")),
             observed_at=observed_at,
+            source="wca_live",
+            source_result_id=str(result["id"]),
+            source_competition_id=wca_live_competition_id,
+            source_competitor_id=str(competitor.get("id") or ""),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise WCALivePayloadError(f"Invalid WCA Live record payload: {exc}") from exc

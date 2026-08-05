@@ -71,6 +71,28 @@ services:
       backend:
         condition: service_healthy
 
+  cubingchina-worker:
+    build: ./backend
+    command: python manage.py run_cubingchina_websocket
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DATABASE_URL: postgresql://cuberecord:cuberecord@database:5432/cuberecord
+      CUBINGCHINA_BASE_URL: ${CUBINGCHINA_BASE_URL:-https://cubing.com}
+      CUBINGCHINA_WS_URL: ${CUBINGCHINA_WS_URL:-wss://cubing.com/ws}
+      CUBINGCHINA_DISCOVERY_INTERVAL_SECONDS: ${CUBINGCHINA_DISCOVERY_INTERVAL_SECONDS:-900}
+      CUBINGCHINA_LOOKBACK_DAYS: ${CUBINGCHINA_LOOKBACK_DAYS:-1}
+      CUBINGCHINA_LOOKAHEAD_DAYS: ${CUBINGCHINA_LOOKAHEAD_DAYS:-7}
+      CUBINGCHINA_COMPLETION_GRACE_HOURS: ${CUBINGCHINA_COMPLETION_GRACE_HOURS:-12}
+      CUBINGCHINA_MAX_CONNECTIONS: ${CUBINGCHINA_MAX_CONNECTIONS:-10}
+      CUBINGCHINA_RETRY_BASE_SECONDS: ${CUBINGCHINA_RETRY_BASE_SECONDS:-1}
+      CUBINGCHINA_RETRY_MAX_SECONDS: ${CUBINGCHINA_RETRY_MAX_SECONDS:-60}
+      CUBINGCHINA_KEEPALIVE_SECONDS: ${CUBINGCHINA_KEEPALIVE_SECONDS:-55}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      backend:
+        condition: service_healthy
+
   frontend:
     image: node:22-alpine
     working_dir: /app

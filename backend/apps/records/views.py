@@ -8,6 +8,8 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from .models import (
+    CubingChinaCompetitionTarget,
+    CubingChinaRoundTarget,
     IngestionWorkerStatus,
     RecentRecordObservation,
     Record,
@@ -82,10 +84,24 @@ def _worker_payload(method: str) -> dict:
     if status is None:
         payload = {
             "status": "unknown",
+            "heartbeat_at": None,
+            "last_started_at": None,
+            "last_stopped_at": None,
+            "last_poll_started_at": None,
+            "last_successful_poll_at": None,
+            "last_connection_at": None,
+            "last_message_at": None,
+            "last_successful_discovery_at": None,
+            "last_successful_snapshot_at": None,
+            "subscribed_round_count": 0,
             "last_error": "",
             "observations_count": observations,
+            "metadata": {},
         }
-        if method == RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION:
+        if method in {
+            RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION,
+            RecentRecordObservation.IngestionMethod.CUBINGCHINA_WEBSOCKET,
+        }:
             payload["connected"] = False
         return payload
     if method == RecentRecordObservation.IngestionMethod.API_POLLING:
@@ -109,12 +125,16 @@ def _worker_payload(method: str) -> dict:
         "last_connection_at": _iso(status.last_connection_at),
         "last_message_at": _iso(status.last_message_at),
         "last_successful_discovery_at": _iso(status.last_successful_discovery_at),
+        "last_successful_snapshot_at": _iso(status.last_successful_snapshot_at),
         "subscribed_round_count": status.subscribed_round_count,
         "last_error": status.last_error,
         "observations_count": observations,
         "metadata": status.metadata,
     }
-    if method == RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION:
+    if method in {
+        RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION,
+        RecentRecordObservation.IngestionMethod.CUBINGCHINA_WEBSOCKET,
+    }:
         payload["connected"] = status.connected
     return payload
 
@@ -130,6 +150,49 @@ def ingestion_status(request):
             active=True, subscription_status=SubscriptionRound.Status.ERROR
         ).count(),
     }
+    cubingchina_counts = {
+        "connected_competition_count": CubingChinaCompetitionTarget.objects.filter(
+            connected=True
+        ).count(),
+        "target_competition_count": CubingChinaCompetitionTarget.objects.filter(
+            active=True
+        ).count(),
+        "pending_competition_count": CubingChinaCompetitionTarget.objects.filter(
+            active=True, status=CubingChinaCompetitionTarget.Status.PENDING
+        ).count(),
+        "target_round_count": CubingChinaRoundTarget.objects.filter(
+            active=True, competition__active=True
+        ).count(),
+    }
+    cubingchina_worker = _worker_payload(
+        RecentRecordObservation.IngestionMethod.CUBINGCHINA_WEBSOCKET
+    )
+    cubingchina_worker.update(cubingchina_counts)
+    competition_health = list(
+        CubingChinaCompetitionTarget.objects.filter(active=True)
+        .order_by("competition_start_date", "slug")
+        .values(
+            "slug",
+            "wca_competition_id",
+            "status",
+            "connected",
+            "last_message_at",
+            "last_snapshot_at",
+            "last_error",
+        )
+    )
+    for target in competition_health:
+        target["last_message_at"] = _iso(target["last_message_at"])
+        target["last_snapshot_at"] = _iso(target["last_snapshot_at"])
+    cubingchina_worker["metadata"] = {
+        **cubingchina_worker["metadata"],
+        "competitions": competition_health,
+    }
+    if not cubingchina_worker["last_error"]:
+        cubingchina_worker["last_error"] = next(
+            (target["last_error"] for target in competition_health if target["last_error"]),
+            "",
+        )
     return Response(
         {
             "api_polling": _worker_payload(
@@ -138,6 +201,7 @@ def ingestion_status(request):
             "graphql_subscription": _worker_payload(
                 RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION
             ),
+            "cubingchina_websocket": cubingchina_worker,
             "subscription_rounds": round_counts,
             "configuration": {
                 "weekend_start": settings.WCA_WEEKEND_START,
@@ -173,7 +237,22 @@ def record_comparison(request):
             api_dt = datetime.fromisoformat(api["detected_at"])
             subscription_dt = datetime.fromisoformat(subscription["detected_at"])
             delta = (api_dt - subscription_dt).total_seconds()
-        entry["matched"] = bool(api and subscription)
+        timestamps = {
+            method: value["detected_at"]
+            for method, value in entry.items()
+            if method != "canonical_key" and isinstance(value, dict)
+        }
+        entry["matched"] = len(timestamps) > 1
+        entry["matching_pipelines"] = sorted(timestamps)
+        entry["detection_timestamps_by_pipeline"] = timestamps
+        if timestamps:
+            earliest = min(datetime.fromisoformat(value) for value in timestamps.values())
+            entry["detection_time_deltas_seconds"] = {
+                method: (datetime.fromisoformat(value) - earliest).total_seconds()
+                for method, value in timestamps.items()
+            }
+        else:
+            entry["detection_time_deltas_seconds"] = {}
         entry["api_minus_subscription_seconds"] = delta
         comparisons.append(entry)
     comparisons.sort(key=lambda row: row["canonical_key"])

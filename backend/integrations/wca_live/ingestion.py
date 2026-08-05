@@ -21,7 +21,27 @@ RECORD_LEVELS = {"WR", "CR", "NR"}
 
 
 def canonical_comparison_key(candidate: RecordCandidate) -> str:
-    return f"{candidate.wca_live_result_id}|{candidate.kind}|{candidate.record_level}"
+    if (
+        candidate.wca_competition_id
+        and candidate.competitor_wca_id
+        and candidate.round_number is not None
+    ):
+        return "|".join(
+            [
+                "wca",
+                candidate.wca_competition_id.upper(),
+                candidate.competitor_wca_id.upper(),
+                candidate.event_id,
+                str(candidate.round_number),
+                candidate.kind,
+                candidate.record_level,
+            ]
+        )
+    source_id = candidate.source_result_id or candidate.wca_live_result_id
+    return (
+        f"{candidate.source}:{source_id or candidate.stable_result_identity}"
+        f"|{candidate.kind}|{candidate.record_level}"
+    )
 
 
 def store_observation(
@@ -30,16 +50,17 @@ def store_observation(
     run: IngestionRun | None,
     ingestion_method: str,
     observed_at=None,
+    source: str = "wca_live",
 ) -> tuple[SourceObservation, bool]:
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     payload_hash = hashlib.sha256(canonical.encode()).hexdigest()
     observation, created = SourceObservation.objects.get_or_create(
-        source="wca_live",
+        source=source,
         ingestion_method=ingestion_method,
         payload_hash=payload_hash,
         defaults={
             "event_type": event_type,
-            "external_id": str(payload.get("id", "")),
+            "external_id": str(payload.get("id") or payload.get("i") or ""),
             "observed_at": observed_at or timezone.now(),
             "payload": payload,
             "ingestion_run": run,
@@ -66,6 +87,14 @@ def persist_record_candidate(
         ingestion_method=ingestion_method,
         defaults={
             "canonical_key": canonical_comparison_key(candidate),
+            "source": candidate.source,
+            "source_result_id": candidate.source_result_id or candidate.wca_live_result_id,
+            "source_competition_id": (
+                candidate.source_competition_id or candidate.wca_live_competition_id
+            ),
+            "source_competitor_id": (
+                candidate.source_competitor_id or candidate.competitor_wca_live_id
+            ),
             "wca_live_record_id": candidate.wca_live_record_id,
             "wca_live_result_id": candidate.wca_live_result_id,
             "wca_live_competition_id": candidate.wca_live_competition_id,
@@ -74,6 +103,7 @@ def persist_record_candidate(
             "competition_start_date": candidate.competition_start_date,
             "competition_end_date": candidate.competition_end_date,
             "round_id": candidate.round_id,
+            "round_number": candidate.round_number,
             "round_name": candidate.round_name,
             "event_id": candidate.event_id,
             "event_name": candidate.event_name,
@@ -96,6 +126,14 @@ def persist_record_candidate(
     )
     if not created:
         observation.canonical_key = canonical_comparison_key(candidate)
+        observation.source = candidate.source
+        observation.source_result_id = candidate.source_result_id or candidate.wca_live_result_id
+        observation.source_competition_id = (
+            candidate.source_competition_id or candidate.wca_live_competition_id
+        )
+        observation.source_competitor_id = (
+            candidate.source_competitor_id or candidate.competitor_wca_live_id
+        )
         observation.wca_live_record_id = candidate.wca_live_record_id
         observation.wca_live_result_id = candidate.wca_live_result_id
         observation.wca_live_competition_id = candidate.wca_live_competition_id
@@ -104,6 +142,7 @@ def persist_record_candidate(
         observation.competition_start_date = candidate.competition_start_date
         observation.competition_end_date = candidate.competition_end_date
         observation.round_id = candidate.round_id
+        observation.round_number = candidate.round_number
         observation.round_name = candidate.round_name
         observation.event_id = candidate.event_id
         observation.event_name = candidate.event_name

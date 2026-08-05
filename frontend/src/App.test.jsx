@@ -13,7 +13,7 @@ afterEach(() => {
 
 
 describe("homepage", () => {
-  it("renders the weekend table underneath both existing record tables", async () => {
+  it("renders the weekend table underneath all three record tables", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url) => {
       if (url.includes("ingestion-status")) {
         return { ok: true, json: async () => ({}) };
@@ -40,6 +40,7 @@ describe("homepage", () => {
       expect(headings).toEqual([
         "Recent records — GraphQL subscriptions",
         "Recent records — API polling",
+        "Recent records — CubingChina live",
         "Competing this weekend"
       ]);
     });

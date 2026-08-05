@@ -45,6 +45,7 @@ class IngestionRun(models.Model):
     class Mode(models.TextChoices):
         API_POLLING = "api_polling", "API polling"
         GRAPHQL_SUBSCRIPTION = "graphql_subscription", "GraphQL subscription"
+        CUBINGCHINA_WEBSOCKET = "cubingchina_websocket", "CubingChina WebSocket"
         SUBSCRIPTION = "subscription", "Subscription"
         RECONCILIATION = "reconciliation", "Reconciliation"
 
@@ -91,6 +92,7 @@ class RecentRecordObservation(models.Model):
     class IngestionMethod(models.TextChoices):
         API_POLLING = "api_polling", "API polling"
         GRAPHQL_SUBSCRIPTION = "graphql_subscription", "GraphQL subscription"
+        CUBINGCHINA_WEBSOCKET = "cubingchina_websocket", "CubingChina WebSocket"
 
     class Kind(models.TextChoices):
         SINGLE = "single", "Single"
@@ -108,6 +110,10 @@ class RecentRecordObservation(models.Model):
     stable_result_identity = models.CharField(max_length=255)
     canonical_key = models.CharField(max_length=512, db_index=True)
     ingestion_method = models.CharField(max_length=32, choices=IngestionMethod.choices)
+    source = models.CharField(max_length=32, default="wca_live")
+    source_result_id = models.CharField(max_length=255, blank=True)
+    source_competition_id = models.CharField(max_length=64, blank=True)
+    source_competitor_id = models.CharField(max_length=64, blank=True)
     wca_live_record_id = models.CharField(max_length=255, blank=True)
     wca_live_result_id = models.CharField(max_length=255)
     wca_live_competition_id = models.CharField(max_length=64, blank=True)
@@ -116,6 +122,7 @@ class RecentRecordObservation(models.Model):
     competition_start_date = models.DateField(null=True, blank=True)
     competition_end_date = models.DateField(null=True, blank=True)
     round_id = models.CharField(max_length=64, blank=True)
+    round_number = models.PositiveSmallIntegerField(null=True, blank=True)
     round_name = models.CharField(max_length=128, blank=True)
     event_id = models.CharField(max_length=16)
     event_name = models.CharField(max_length=128)
@@ -234,8 +241,97 @@ class IngestionWorkerStatus(models.Model):
     last_connection_at = models.DateTimeField(null=True, blank=True)
     last_message_at = models.DateTimeField(null=True, blank=True)
     last_successful_discovery_at = models.DateTimeField(null=True, blank=True)
+    last_successful_snapshot_at = models.DateTimeField(null=True, blank=True)
     subscribed_round_count = models.PositiveIntegerField(default=0)
     last_error = models.TextField(blank=True)
     metadata = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class CubingChinaCompetitionTarget(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACTIVE = "active", "Active"
+        ERROR = "error", "Error"
+        RETIRED = "retired", "Retired"
+
+    slug = models.CharField(max_length=180, unique=True)
+    cubingchina_id = models.PositiveIntegerField(null=True, blank=True, unique=True)
+    wca_competition_id = models.CharField(max_length=64, blank=True)
+    competition_name = models.CharField(max_length=255)
+    competition_start_date = models.DateField()
+    competition_end_date = models.DateField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    active = models.BooleanField(default=True)
+    connected = models.BooleanField(default=False)
+    last_discovered_at = models.DateTimeField(null=True, blank=True)
+    last_connected_at = models.DateTimeField(null=True, blank=True)
+    last_message_at = models.DateTimeField(null=True, blank=True)
+    last_snapshot_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["competition_start_date", "competition_name"]
+
+
+class CubingChinaRoundTarget(models.Model):
+    competition = models.ForeignKey(
+        CubingChinaCompetitionTarget, on_delete=models.CASCADE, related_name="rounds"
+    )
+    event_id = models.CharField(max_length=16)
+    event_name = models.CharField(max_length=128)
+    round_id = models.CharField(max_length=16)
+    round_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    round_name = models.CharField(max_length=128, blank=True)
+    format = models.CharField(max_length=8, blank=True)
+    cutoff = models.IntegerField(default=0)
+    time_limit = models.IntegerField(default=0)
+    source_status = models.IntegerField(default=0)
+    active = models.BooleanField(default=True)
+    last_snapshot_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["competition", "event_id", "round_number", "round_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["competition", "event_id", "round_id"],
+                name="unique_cubingchina_round_target",
+            )
+        ]
+
+
+class CubingChinaResultState(models.Model):
+    round = models.ForeignKey(
+        CubingChinaRoundTarget, on_delete=models.CASCADE, related_name="result_states"
+    )
+    result_id = models.CharField(max_length=64)
+    stable_result_identity = models.CharField(max_length=255)
+    competitor_number = models.PositiveIntegerField()
+    competitor_name = models.CharField(max_length=255, blank=True)
+    competitor_wca_id = models.CharField(max_length=16, blank=True)
+    region = models.CharField(max_length=128, blank=True)
+    country_code = models.CharField(max_length=8, blank=True)
+    attempts = models.JSONField(default=list)
+    best = models.IntegerField(null=True, blank=True)
+    average = models.IntegerField(null=True, blank=True)
+    single_record_tag = models.CharField(max_length=8, blank=True)
+    average_record_tag = models.CharField(max_length=8, blank=True)
+    meaningful_hash = models.CharField(max_length=64)
+    normalized_payload = models.JSONField(default=dict)
+    active = models.BooleanField(default=True)
+    first_observed_at = models.DateTimeField()
+    last_observed_at = models.DateTimeField()
+    processed_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["round", "result_id"], name="unique_cubingchina_result_per_round"
+            )
+        ]

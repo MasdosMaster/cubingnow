@@ -11,9 +11,16 @@ function absoluteTime(value) {
   return value ? new Date(value).toLocaleString() : "Never";
 }
 
+function sourceName(record) {
+  if (record.source_name) return record.source_name;
+  if (record.ingestion_method === "cubingchina_websocket") return "CubingChina";
+  if (["api_polling", "graphql_subscription"].includes(record.ingestion_method)) return "WCA Live";
+  return "Source";
+}
+
 function WorkerSummary({ worker, roundStatus }) {
   if (!worker) return <span className="worker-state unknown">Status unknown</span>;
-  const lastUpdate = worker.last_successful_poll_at || worker.last_message_at || worker.last_successful_discovery_at;
+  const lastUpdate = worker.last_successful_poll_at || worker.last_successful_snapshot_at || worker.last_message_at || worker.last_successful_discovery_at;
   return (
     <div className="worker-summary">
       <span className={`worker-state ${worker.status}`}>{worker.status}</span>
@@ -21,6 +28,9 @@ function WorkerSummary({ worker, roundStatus }) {
         <span>{worker.connected ? "Connected" : "Disconnected"}</span>
       )}
       {roundStatus && <span>{roundStatus.subscribed}/{roundStatus.discovered} rounds subscribed</span>}
+      {Object.prototype.hasOwnProperty.call(worker, "connected_competition_count") && (
+        <span>{worker.connected_competition_count}/{worker.target_competition_count} competitions connected</span>
+      )}
       <span title={absoluteTime(lastUpdate)}>Last successful update: {lastUpdate ? formatDetectedAge(lastUpdate) : "never"}</span>
       {worker.last_error && <span className="worker-error" title={worker.last_error}>Latest error</span>}
     </div>
@@ -55,7 +65,7 @@ export function RecordList({ title, subtitle, records, loading, error, worker, r
                     {formatDetectedAge(record.detected_at)}<small>{absoluteTime(record.detected_at)}</small>
                   </time>
                   <span className={record.matched_in_other_pipeline ? "match yes" : "match"}>{record.matched_in_other_pipeline ? "Matched" : "Waiting"}</span>
-                  {record.source_url ? <a className="source-link" href={record.source_url} target="_blank" rel="noreferrer">WCA Live ↗</a> : <span>—</span>}
+                  {record.source_url ? <a className="source-link" href={record.source_url} target="_blank" rel="noreferrer">{sourceName(record)} ↗</a> : <span>—</span>}
                 </article>
               ))}
             </div>
