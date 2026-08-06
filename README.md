@@ -29,6 +29,10 @@ docker compose up --build
 
 PostgreSQL data is stored in the Docker volume `postgres_data`. It is local development data and is not committed or copied to production.
 
+Guest WR/CR/NR Web Push alerts use a durable notification event/delivery queue and a separate
+`notification-worker` service. Configure one persistent VAPID key pair before enabling record
+publication; see [Guest Web Push operations](docs/web-push.md).
+
 ## Development without Docker
 
 Use Python 3.12 or newer and PostgreSQL 14 or newer.
@@ -103,6 +107,12 @@ subscription. See [Weekend record verification](docs/weekend-record-verification
 verified protocol, initial snapshot policy, environment variables, logs, health checks, tests,
 and the operating checklist.
 
+Record notification publication is disabled by default to prevent historical imports from
+creating alerts. After the notification migration, VAPID configuration, and notification worker
+are ready, set `PUSH_RECORD_EVENT_SOURCE=api_polling` (or the one verified source chosen for the
+experiment). Event uniqueness uses the existing ingestion-neutral canonical record key, so a
+second source cannot create another event or endpoint delivery for the same real record.
+
 ## Production data
 
 Production should use a managed PostgreSQL database with automated backups. The hosting platform provides `DATABASE_URL` and other secrets. Deployments install dependencies from the committed manifests, run `python manage.py migrate`, and start separate API, collector, and scheduled reconciliation processes. Local database contents never deploy automatically.
@@ -111,12 +121,13 @@ Python dependencies are declared in `backend/pyproject.toml` and resolved exactl
 
 ## Deploying to Render
 
-The root `render.yaml` defines seven Render resources:
+The root `render.yaml` defines eight Render resources:
 
 - `cubingnow-web`: React static site at `cubingnow.com`
 - `cubingnow-api`: Django API at `api.cubingnow.com`
 - `cubingnow-api-poller`: continuous WCA Live recent-record poller
 - `cubingnow-subscription-worker`: continuous WCA Live round subscription supervisor
+- `cubingnow-notification-worker`: queued Web Push delivery worker
 - `cubingnow-cubingchina-worker`: continuous CubingChina discovery and live collection
 - `cubingnow-weekend-attendance-sync`: six-hourly public registration synchronization
 - `cubingnow-db`: PostgreSQL database
@@ -133,3 +144,7 @@ Add `cubingnow.com` to the static site and `api.cubingnow.com` to the API servic
 cd backend && pytest
 cd frontend && npm test
 ```
+
+Backend notification coverage mocks `pywebpush`; automated tests never contact a real browser push
+service. Run `npm run build` to verify that the root service worker, manifest, and PWA icons are
+included in the production frontend artifact.

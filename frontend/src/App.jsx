@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getIngestionStatus, getRecentRecords, getWeekendCompetitors } from "./api/client";
 import { RecordList } from "./components/RecordList";
+import { NotificationSettings } from "./components/NotificationSettings";
 import { WeekendCompetitorList } from "./components/WeekendCompetitorList";
 import "./styles.css";
 
@@ -107,6 +108,7 @@ export default function App() {
         <nav className="filters" aria-label="Record level">
           {levels.map((item) => <button className={level === item ? "active" : ""} key={item || "all"} onClick={() => setLevel(item)}>{item || "All"}</button>)}
         </nav>
+        <NotificationSettings />
         {statusError && <p className="status-warning">Worker health unavailable: {statusError}</p>}
         <RecordList
           title="Recent records — GraphQL subscriptions"

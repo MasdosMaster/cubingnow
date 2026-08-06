@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from apps.notifications.services import publish_record_after_commit
 from apps.records.models import (
     IngestionRun,
     RecentRecordObservation,
@@ -161,6 +162,7 @@ def persist_record_candidate(
         observation.last_observed_at = candidate.observed_at
         observation.source_payload = source_payload
         observation.save()
+    publish_record_after_commit(observation.pk, ingestion_method)
     return observation, created
 
 

@@ -31,6 +31,12 @@ services:
         value: api.cubingnow.com
       - key: CORS_ALLOWED_ORIGINS
         value: https://cubingnow.com,https://www.cubingnow.com
+      - key: WEB_PUSH_VAPID_PUBLIC_KEY
+        sync: false
+      - key: WEB_PUSH_VAPID_PRIVATE_KEY
+        sync: false
+      - key: WEB_PUSH_VAPID_SUBJECT
+        value: mailto:contact@cubingnow.com
 
   - type: worker
     name: cubingnow-api-poller
@@ -53,6 +59,8 @@ services:
         value: api.cubingnow.com
       - key: WCA_API_POLL_INTERVAL_SECONDS
         value: "60"
+      - key: PUSH_RECORD_EVENT_SOURCE
+        value: api_polling
 
   - type: worker
     name: cubingnow-subscription-worker
@@ -83,6 +91,42 @@ services:
         value: "900"
       - key: WCA_SUBSCRIPTION_CATCHUP_MINUTES
         value: "60"
+
+  - type: worker
+    name: cubingnow-notification-worker
+    runtime: python
+    plan: starter
+    region: frankfurt
+    rootDir: backend
+    maxShutdownDelaySeconds: 30
+    buildCommand: uv sync --frozen --no-dev
+    startCommand: until uv run python manage.py migrate --check; do sleep 5; done; uv run python manage.py run_notification_worker
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          type: web
+          name: cubingnow-api
+          envVarKey: DJANGO_SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cubingnow-db
+          property: connectionString
+      - key: DJANGO_ALLOWED_HOSTS
+        value: api.cubingnow.com
+      - key: WEB_PUSH_VAPID_PUBLIC_KEY
+        fromService:
+          type: web
+          name: cubingnow-api
+          envVarKey: WEB_PUSH_VAPID_PUBLIC_KEY
+      - key: WEB_PUSH_VAPID_PRIVATE_KEY
+        fromService:
+          type: web
+          name: cubingnow-api
+          envVarKey: WEB_PUSH_VAPID_PRIVATE_KEY
+      - key: WEB_PUSH_VAPID_SUBJECT
+        value: mailto:contact@cubingnow.com
 
   - type: worker
     name: cubingnow-cubingchina-worker

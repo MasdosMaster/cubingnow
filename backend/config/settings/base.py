@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     "apps.records",
     "apps.competitions",
     "apps.competitors",
+    "apps.notifications",
 ]
 
 MIDDLEWARE = [
@@ -75,7 +76,38 @@ CORS_ALLOWED_ORIGINS = [
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
+    "DEFAULT_THROTTLE_RATES": {"notifications": "120/minute"},
 }
+
+# Guest Web Push. VAPID keys are persistent deployment secrets; the application
+# never generates or rotates them automatically.
+PUSH_NOTIFICATION_PROVIDER = os.getenv("PUSH_NOTIFICATION_PROVIDER", "webpush")
+PUSH_RECORD_EVENT_SOURCE = os.getenv("PUSH_RECORD_EVENT_SOURCE", "disabled")
+WEB_PUSH_VAPID_PUBLIC_KEY = os.getenv("WEB_PUSH_VAPID_PUBLIC_KEY", "")
+WEB_PUSH_VAPID_PRIVATE_KEY = os.getenv("WEB_PUSH_VAPID_PRIVATE_KEY", "")
+WEB_PUSH_VAPID_SUBJECT = os.getenv(
+    "WEB_PUSH_VAPID_SUBJECT", "mailto:contact@cubingnow.com"
+)
+PUSH_WORKER_POLL_INTERVAL_SECONDS = float(
+    os.getenv("PUSH_WORKER_POLL_INTERVAL_SECONDS", "5")
+)
+PUSH_WORKER_BATCH_SIZE = int(os.getenv("PUSH_WORKER_BATCH_SIZE", "50"))
+PUSH_WORKER_MAX_ATTEMPTS = int(os.getenv("PUSH_WORKER_MAX_ATTEMPTS", "5"))
+PUSH_WORKER_RETRY_SCHEDULE_SECONDS = tuple(
+    int(value)
+    for value in os.getenv(
+        "PUSH_WORKER_RETRY_SCHEDULE_SECONDS", "60,300,1800,7200"
+    ).split(",")
+    if value.strip()
+)
+PUSH_WORKER_CLAIM_TIMEOUT_SECONDS = int(
+    os.getenv("PUSH_WORKER_CLAIM_TIMEOUT_SECONDS", "300")
+)
+PUSH_WORKER_IDENTIFIER = os.getenv("PUSH_WORKER_IDENTIFIER", "")
+WEB_PUSH_TTL_SECONDS = int(os.getenv("WEB_PUSH_TTL_SECONDS", "300"))
+WEB_PUSH_REQUEST_TIMEOUT_SECONDS = float(
+    os.getenv("WEB_PUSH_REQUEST_TIMEOUT_SECONDS", "10")
+)
 
 # WCA Live observational record-ingestion experiment. Dates are deliberately
 # centralized here and can be overridden without changing code or containers.
@@ -157,6 +189,11 @@ LOGGING = {
             "propagate": False,
         },
         "apps.competitors": {
+            "handlers": ["console"],
+            "level": os.getenv("CUBINGNOW_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "apps.notifications": {
             "handlers": ["console"],
             "level": os.getenv("CUBINGNOW_LOG_LEVEL", "INFO"),
             "propagate": False,

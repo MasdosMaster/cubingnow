@@ -30,6 +30,22 @@ input { width: min(280px, 40vw); height: 40px; border: 1px solid #dedfe3; paddin
 .record-row { min-height: 88px; border-bottom: 1px solid #dedfe3; }
 .record-row strong, .record-row small { display: block; }.record-row small { margin-top: 5px; }.result { font-size: 21px; font-variant-numeric: tabular-nums; }
 .record-row.withdrawn { opacity: .58; }.record-row.withdrawn .result { text-decoration: line-through; }
+
+.notification-settings { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(300px, 1.2fr); gap: 28px; margin: 24px 0 34px; padding: 24px; border: 1px solid #dedfe3; border-radius: 14px; background: #fff; }
+.notification-settings h2 { margin: 0; font-size: 24px; }
+.notification-status, .notification-help { color: #62666f; line-height: 1.45; }
+.notification-controls fieldset { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 0 0 18px; padding: 0; border: 0; }
+.notification-controls legend { margin-bottom: 10px; color: #62666f; font-size: 12px; font-weight: 800; text-transform: uppercase; }
+.notification-controls label { display: flex; gap: 8px; align-items: center; font-weight: 650; }
+.notification-controls input[type="checkbox"] { width: 16px; height: 16px; }
+.notification-actions button { min-height: 42px; padding: 0 18px; border: 0; border-radius: 8px; background: #101217; color: white; font-weight: 750; cursor: pointer; }
+.notification-actions button.secondary { background: #ececef; color: #202229; }
+.notification-actions button:disabled { cursor: not-allowed; opacity: .5; }
+.notification-controls small { display: block; margin-top: 12px; color: #62666f; }
+
+@media (max-width: 720px) {
+  .notification-settings { grid-template-columns: 1fr; }
+}
 .detected-age { color: #34373d; font-size: 12px; white-space: nowrap; }.detected-age small { white-space: normal; line-height: 1.25; }
 .level { display: block; width: 38px; padding: 6px 0; color: white; text-align: center; font-size: 11px; font-weight: 850; }.level-wr { background: #d84231; }.level-cr { background: #2670d8; }.level-nr { background: #18845a; }
 .match { color: #8a6d16; font-size: 11px; font-weight: 750; }.match.yes { color: #18845a; }.source-link { color: #2670d8; font-size: 11px; font-weight: 700; text-decoration: none; }

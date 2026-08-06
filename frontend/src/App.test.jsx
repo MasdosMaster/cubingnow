@@ -38,6 +38,7 @@ describe("homepage", () => {
     await waitFor(() => {
       const headings = Array.from(document.querySelectorAll("main h2")).map((node) => node.textContent);
       expect(headings).toEqual([
+        "Record alerts",
         "Recent records — GraphQL subscriptions",
         "Recent records — API polling",
         "Recent records — CubingChina live",

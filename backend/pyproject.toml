@@ -13,6 +13,8 @@ dependencies = [
   "gunicorn>=23,<24",
   "beautifulsoup4>=4.13,<5",
   "pycountry>=24.6,<27",
+  "pywebpush>=2.3,<2.4",
+  "requests>=2.34,<3",
 ]
 
 [project.optional-dependencies]

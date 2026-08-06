@@ -25,6 +25,9 @@ services:
       WCA_WEEKEND_END: ${WCA_WEEKEND_END:-2026-08-10}
       WCA_COMPETITION_LOOKBACK_DAYS: ${WCA_COMPETITION_LOOKBACK_DAYS:-7}
       WCA_SUBSCRIPTION_CATCHUP_MINUTES: ${WCA_SUBSCRIPTION_CATCHUP_MINUTES:-60}
+      WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      WEB_PUSH_VAPID_SUBJECT: ${WEB_PUSH_VAPID_SUBJECT:-mailto:contact@cubingnow.com}
     volumes:
       - ./backend:/app
     ports:
@@ -46,6 +49,7 @@ services:
       DATABASE_URL: postgresql://cuberecord:cuberecord@database:5432/cuberecord
       WCA_LIVE_API_URL: ${WCA_LIVE_API_URL:-https://live.worldcubeassociation.org/api}
       WCA_API_POLL_INTERVAL_SECONDS: ${WCA_API_POLL_INTERVAL_SECONDS:-60}
+      PUSH_RECORD_EVENT_SOURCE: ${PUSH_RECORD_EVENT_SOURCE:-disabled}
     volumes:
       - ./backend:/app
     depends_on:
@@ -65,6 +69,7 @@ services:
       WCA_COMPETITION_LOOKBACK_DAYS: ${WCA_COMPETITION_LOOKBACK_DAYS:-7}
       WCA_ROUND_DISCOVERY_INTERVAL_SECONDS: ${WCA_ROUND_DISCOVERY_INTERVAL_SECONDS:-900}
       WCA_SUBSCRIPTION_CATCHUP_MINUTES: ${WCA_SUBSCRIPTION_CATCHUP_MINUTES:-60}
+      PUSH_RECORD_EVENT_SOURCE: ${PUSH_RECORD_EVENT_SOURCE:-disabled}
     volumes:
       - ./backend:/app
     depends_on:
@@ -87,6 +92,31 @@ services:
       CUBINGCHINA_RETRY_BASE_SECONDS: ${CUBINGCHINA_RETRY_BASE_SECONDS:-1}
       CUBINGCHINA_RETRY_MAX_SECONDS: ${CUBINGCHINA_RETRY_MAX_SECONDS:-60}
       CUBINGCHINA_KEEPALIVE_SECONDS: ${CUBINGCHINA_KEEPALIVE_SECONDS:-55}
+      PUSH_RECORD_EVENT_SOURCE: ${PUSH_RECORD_EVENT_SOURCE:-disabled}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  notification-worker:
+    build: ./backend
+    command: python manage.py run_notification_worker
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DATABASE_URL: postgresql://cuberecord:cuberecord@database:5432/cuberecord
+      PUSH_NOTIFICATION_PROVIDER: ${PUSH_NOTIFICATION_PROVIDER:-webpush}
+      WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      WEB_PUSH_VAPID_SUBJECT: ${WEB_PUSH_VAPID_SUBJECT:-mailto:contact@cubingnow.com}
+      PUSH_WORKER_POLL_INTERVAL_SECONDS: ${PUSH_WORKER_POLL_INTERVAL_SECONDS:-5}
+      PUSH_WORKER_BATCH_SIZE: ${PUSH_WORKER_BATCH_SIZE:-50}
+      PUSH_WORKER_MAX_ATTEMPTS: ${PUSH_WORKER_MAX_ATTEMPTS:-5}
+      PUSH_WORKER_RETRY_SCHEDULE_SECONDS: ${PUSH_WORKER_RETRY_SCHEDULE_SECONDS:-60,300,1800,7200}
+      PUSH_WORKER_CLAIM_TIMEOUT_SECONDS: ${PUSH_WORKER_CLAIM_TIMEOUT_SECONDS:-300}
+      PUSH_WORKER_IDENTIFIER: ${PUSH_WORKER_IDENTIFIER:-}
+      WEB_PUSH_TTL_SECONDS: ${WEB_PUSH_TTL_SECONDS:-300}
+      WEB_PUSH_REQUEST_TIMEOUT_SECONDS: ${WEB_PUSH_REQUEST_TIMEOUT_SECONDS:-10}
     volumes:
       - ./backend:/app
     depends_on:
@@ -97,6 +127,8 @@ services:
     image: node:22-alpine
     working_dir: /app
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
