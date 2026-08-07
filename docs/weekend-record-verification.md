@@ -116,7 +116,8 @@ The contract was verified against WCA Live's deployed introspection schema and t
 - WebSocket: `wss://live.worldcubeassociation.org/socket/websocket?vsn=2.0.0`
 - Protocol: Phoenix v2 array frames with an Absinthe control channel, not
   `graphql-transport-ws`
-- Control topic: `__absinthe__:control`
+- Join/document topic: `__absinthe__:control`
+- Update topic: the per-document subscription ID returned by WCA Live
 - Join event: `phx_join`
 - Document event: `doc`
 - Update event: `subscription:data`

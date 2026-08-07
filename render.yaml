@@ -90,7 +90,7 @@ services:
       - key: WCA_ROUND_DISCOVERY_INTERVAL_SECONDS
         value: "900"
       - key: WCA_SUBSCRIPTION_CATCHUP_MINUTES
-        value: "180"
+        value: "60"
 
   - type: worker
     name: cubingnow-notification-worker

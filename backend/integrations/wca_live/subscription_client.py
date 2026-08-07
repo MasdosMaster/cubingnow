@@ -259,7 +259,7 @@ class WCALiveSubscriptionClient:
                     raise WCALiveIntegrationError(
                         f"WCA Live Phoenix {event} topic={topic}: {payload}"
                     )
-                elif topic == self.CONTROL_TOPIC and event == "subscription:data":
+                elif event == "subscription:data":
                     self._frame_counters["subscription_data_frames"] += 1
                     if not isinstance(payload, dict):
                         self._frame_counters["malformed_frames"] += 1

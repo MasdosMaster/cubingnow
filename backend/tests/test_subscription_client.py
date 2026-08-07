@@ -69,7 +69,7 @@ def test_multiplexes_rounds_and_routes_full_snapshot_payloads():
                 [
                     "1",
                     None,
-                    "__absinthe__:control",
+                    "subscription-round-2",
                     "subscription:data",
                     {
                         "subscriptionId": "subscription-round-2",
@@ -114,7 +114,7 @@ def test_tracks_heartbeat_unknown_subscription_and_ignored_frames():
                 [
                     "1",
                     None,
-                    "__absinthe__:control",
+                    "unknown-id",
                     "subscription:data",
                     {"subscriptionId": "unknown-id", "result": {"data": {}}},
                 ]
