@@ -63,6 +63,7 @@ function useWeekendCompetitors(continent) {
 }
 
 export default function App() {
+  const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem("cubingnow-theme") === "dark");
   const [level, setLevel] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState(null);
@@ -72,6 +73,11 @@ export default function App() {
   const subscriptions = usePipelineRecords("graphql_subscription", level, query);
   const cubingChina = usePipelineRecords("cubingchina_websocket", level, query);
   const weekendCompetitors = useWeekendCompetitors(continent);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+    window.localStorage.setItem("cubingnow-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   useEffect(() => {
     let current = true;
@@ -97,13 +103,27 @@ export default function App() {
   return (
     <>
       <header>
-        <a className="brand" href="/"><span className="brand-mark"><i /><i /><i /><i /></span>CubingNow</a>
-        <span className="api-label">WCA Live verification experiment</span>
+        <div className="header-inner">
+          <a className="brand" href="/"><span className="brand-mark"><i /><i /><i /><i /></span><span>Cubing<span className="brand-accent">Now</span></span></a>
+          <div className="header-actions">
+            <span className="api-label">WCA Live verification experiment</span>
+            <button
+              aria-label={darkMode ? "Use light mode" : "Use dark mode"}
+              aria-pressed={darkMode}
+              className="theme-toggle"
+              onClick={() => setDarkMode((current) => !current)}
+              title={darkMode ? "Use light mode" : "Use dark mode"}
+              type="button"
+            >
+              <span aria-hidden="true">{darkMode ? "☾" : "☀"}</span>
+            </button>
+          </div>
+        </div>
       </header>
       <main>
         <section className="heading">
-          <div><p className="eyebrow">Independent observations</p><h1>Recent WCA records</h1></div>
-          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records" />
+          <div><p className="eyebrow">Independent observations</p><h1>Recent WCA records</h1><p className="heading-copy">Live record detections, independently checked across multiple sources.</p></div>
+          <label className="search-box"><span aria-hidden="true">⌕</span><input aria-label="Search records" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records" /></label>
         </section>
         <nav className="filters" aria-label="Record level">
           {levels.map((item) => <button className={level === item ? "active" : ""} key={item || "all"} onClick={() => setLevel(item)}>{item || "All"}</button>)}
