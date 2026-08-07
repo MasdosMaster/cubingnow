@@ -104,7 +104,7 @@ export default function App() {
     <>
       <header>
         <div className="header-inner">
-          <a className="brand" href="/"><span className="brand-mark"><i /><i /><i /><i /></span><span>Cubing<span className="brand-accent">Now</span></span></a>
+          <a className="brand" href="/">CubingNow</a>
           <div className="header-actions">
             <span className="api-label">WCA Live verification experiment</span>
             <button
@@ -122,8 +122,8 @@ export default function App() {
       </header>
       <main>
         <section className="heading">
-          <div><p className="eyebrow">Independent observations</p><h1>Recent WCA records</h1><p className="heading-copy">Live record detections, independently checked across multiple sources.</p></div>
-          <label className="search-box"><span aria-hidden="true">⌕</span><input aria-label="Search records" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records" /></label>
+          <div><p className="eyebrow">Independent observations</p><h1>Recent WCA records</h1></div>
+          <input aria-label="Search records" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records" />
         </section>
         <nav className="filters" aria-label="Record level">
           {levels.map((item) => <button className={level === item ? "active" : ""} key={item || "all"} onClick={() => setLevel(item)}>{item || "All"}</button>)}
