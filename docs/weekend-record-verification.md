@@ -199,6 +199,12 @@ Health/status:
 curl http://localhost:8000/api/ingestion-status/
 ```
 
+The subscription worker publishes protocol diagnostics under
+`graphql_subscription.metadata.websocket`. Its counters distinguish acknowledged documents and
+heartbeat replies from actual `subscription:data` frames. `last_unexpected_frame` records only the
+frame envelope and payload keys, not the full result payload. Unexpected topics/events, unknown
+subscription IDs, malformed frames, and uncorrelated replies are also written to the worker log.
+
 Independent record collections:
 
 ```bash

@@ -16,7 +16,9 @@ class FakeSocket:
         join_ref, reference, topic, event, payload = self.sent[-1]
         if event == "phx_join":
             await self.received.put(
-                json.dumps([join_ref, reference, topic, "phx_reply", {"status": "ok", "response": {}}])
+                json.dumps(
+                    [join_ref, reference, topic, "phx_reply", {"status": "ok", "response": {}}]
+                )
             )
         elif event == "doc":
             subscription_id = f"subscription-{payload['variables']['id']}"
@@ -79,8 +81,62 @@ def test_multiplexes_rounds_and_routes_full_snapshot_payloads():
         round_id, data = await asyncio.wait_for(client.next_message(), 1)
         assert round_id == "round-2"
         assert data["roundUpdated"]["results"] == []
+        counters = client.websocket_diagnostics["counters"]
+        assert counters["frames_received"] == 4
+        assert counters["reply_frames"] == 3
+        assert counters["subscription_data_frames"] == 1
+        assert counters["subscription_messages_queued"] == 1
+        assert counters["unexpected_frames"] == 0
         await client.close()
         assert socket.closed
+
+    asyncio.run(scenario())
+
+
+def test_tracks_heartbeat_unknown_subscription_and_ignored_frames():
+    async def scenario():
+        socket = FakeSocket()
+
+        async def connect_factory(*_args, **_kwargs):
+            return socket
+
+        client = WCALiveSubscriptionClient(
+            "wss://example.test/socket",
+            heartbeat_interval=3600,
+            connect_factory=connect_factory,
+        )
+        await client.connect()
+        await socket.received.put(
+            json.dumps([None, "heartbeat-1", "phoenix", "phx_reply", {"status": "ok"}])
+        )
+        await socket.received.put(
+            json.dumps(
+                [
+                    "1",
+                    None,
+                    "__absinthe__:control",
+                    "subscription:data",
+                    {"subscriptionId": "unknown-id", "result": {"data": {}}},
+                ]
+            )
+        )
+        await socket.received.put(
+            json.dumps(["1", None, "different-topic", "different-event", {"detail": "test"}])
+        )
+        for _attempt in range(20):
+            if client.websocket_diagnostics["counters"]["unexpected_frames"] == 1:
+                break
+            await asyncio.sleep(0.01)
+
+        diagnostics = client.websocket_diagnostics
+        assert diagnostics["counters"]["heartbeat_replies"] == 1
+        assert diagnostics["counters"]["subscription_data_frames"] == 1
+        assert diagnostics["counters"]["unknown_subscription_ids"] == 1
+        assert diagnostics["counters"]["unexpected_frames"] == 1
+        assert diagnostics["last_unexpected_frame"]["topic"] == "different-topic"
+        assert diagnostics["last_unexpected_frame"]["event"] == "different-event"
+        assert diagnostics["last_unexpected_frame"]["payload_keys"] == ["detail"]
+        await client.close()
 
     asyncio.run(scenario())
 

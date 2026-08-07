@@ -130,7 +130,7 @@ class SubscriptionSupervisor:
                     await self._subscribe_targets(client, targets)
                     discovery_task = asyncio.create_task(asyncio.sleep(self.discovery_interval))
                 if heartbeat_task in done:
-                    await self._db(self._heartbeat)
+                    await self._db(self._heartbeat, client.websocket_diagnostics)
                     heartbeat_task = asyncio.create_task(asyncio.sleep(30))
         finally:
             for task in (message_task, discovery_task, heartbeat_task):
@@ -155,9 +155,7 @@ class SubscriptionSupervisor:
             if round_id in client.subscribed_round_ids:
                 continue
             try:
-                subscription_id = await client.subscribe_round(
-                    round_id, ROUND_UPDATED_SUBSCRIPTION
-                )
+                subscription_id = await client.subscribe_round(round_id, ROUND_UPDATED_SUBSCRIPTION)
                 await self._db(self._mark_round_subscribed, round_id, subscription_id)
             except Exception as exc:
                 logger.exception("round_subscription_failed round_id=%s", round_id)
@@ -226,6 +224,11 @@ class SubscriptionSupervisor:
             subscription_id="",
         )
         now = timezone.now()
+        worker = (
+            IngestionWorkerStatus.objects.filter(ingestion_method=METHOD).only("metadata").first()
+        )
+        if worker and worker.metadata.get("websocket"):
+            metadata["websocket"] = worker.metadata["websocket"]
         IngestionWorkerStatus.objects.filter(ingestion_method=METHOD).update(
             heartbeat_at=now,
             last_successful_discovery_at=now,
@@ -258,10 +261,17 @@ class SubscriptionSupervisor:
         )
 
     @staticmethod
-    def _heartbeat():
-        IngestionWorkerStatus.objects.filter(ingestion_method=METHOD).update(
-            heartbeat_at=timezone.now()
-        )
+    def _heartbeat(websocket_diagnostics: dict | None = None):
+        queryset = IngestionWorkerStatus.objects.filter(ingestion_method=METHOD)
+        if websocket_diagnostics is None:
+            queryset.update(heartbeat_at=timezone.now())
+            return
+        status = queryset.only("metadata").first()
+        if status is None:
+            return
+        status.metadata = {**status.metadata, "websocket": websocket_diagnostics}
+        status.heartbeat_at = timezone.now()
+        status.save(update_fields=["heartbeat_at", "metadata", "updated_at"])
 
     @staticmethod
     def _record_message_received(round_id: str):

@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import json
 import logging
+from collections import Counter
 from itertools import count
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -10,6 +11,19 @@ import websockets
 from .exceptions import WCALiveIntegrationError
 
 logger = logging.getLogger(__name__)
+
+FRAME_COUNTER_KEYS = (
+    "frames_received",
+    "bytes_received",
+    "reply_frames",
+    "heartbeat_replies",
+    "subscription_data_frames",
+    "subscription_messages_queued",
+    "subscription_error_frames",
+    "unknown_subscription_ids",
+    "unexpected_frames",
+    "malformed_frames",
+)
 
 
 class WCALiveSubscriptionClient:
@@ -38,6 +52,9 @@ class WCALiveSubscriptionClient:
         self._messages = asyncio.Queue()
         self._subscription_to_round = {}
         self._round_to_subscription = {}
+        self._frame_counters = Counter({key: 0 for key in FRAME_COUNTER_KEYS})
+        self._last_frame = None
+        self._last_unexpected_frame = None
 
     @staticmethod
     def _normalize_endpoint(endpoint: str) -> str:
@@ -56,6 +73,15 @@ class WCALiveSubscriptionClient:
     @property
     def subscribed_round_ids(self) -> set[str]:
         return set(self._round_to_subscription)
+
+    @property
+    def websocket_diagnostics(self) -> dict:
+        """Return a JSON-safe summary suitable for health metadata and logs."""
+        return {
+            "counters": dict(self._frame_counters),
+            "last_frame": self._last_frame,
+            "last_unexpected_frame": self._last_unexpected_frame,
+        }
 
     async def __aenter__(self):
         await self.connect()
@@ -161,25 +187,103 @@ class WCALiveSubscriptionClient:
     async def _reader_loop(self) -> None:
         try:
             async for raw_message in self._socket:
-                frame = json.loads(raw_message)
+                self._frame_counters["frames_received"] += 1
+                self._frame_counters["bytes_received"] += len(raw_message)
+                try:
+                    frame = json.loads(raw_message)
+                except (json.JSONDecodeError, TypeError) as exc:
+                    self._frame_counters["malformed_frames"] += 1
+                    logger.error(
+                        "websocket_frame_invalid_json raw_type=%s raw_length=%d error=%s",
+                        type(raw_message).__name__,
+                        len(raw_message),
+                        exc,
+                    )
+                    raise WCALiveIntegrationError("Invalid JSON in WCA Live Phoenix frame") from exc
                 if not isinstance(frame, list) or len(frame) != 5:
+                    self._frame_counters["malformed_frames"] += 1
+                    self._last_unexpected_frame = {
+                        "reason": "invalid_shape",
+                        "frame_type": type(frame).__name__,
+                        "frame_length": len(frame) if isinstance(frame, list) else None,
+                    }
+                    logger.error(
+                        "websocket_frame_invalid_shape frame_type=%s frame_length=%s",
+                        type(frame).__name__,
+                        len(frame) if isinstance(frame, list) else "n/a",
+                    )
                     raise WCALiveIntegrationError(
                         f"Invalid Phoenix frame received: {type(frame).__name__}"
                     )
-                _join_ref, reference, topic, event, payload = frame
+                join_ref, reference, topic, event, payload = frame
+                payload_keys = sorted(payload) if isinstance(payload, dict) else []
+                frame_summary = {
+                    "join_ref": str(join_ref) if join_ref is not None else None,
+                    "reference": str(reference) if reference is not None else None,
+                    "topic": str(topic),
+                    "event": str(event),
+                    "payload_type": type(payload).__name__,
+                    "payload_keys": payload_keys,
+                }
+                if isinstance(payload, dict) and payload.get("subscriptionId"):
+                    frame_summary["subscription_id"] = str(payload["subscriptionId"])
+                self._last_frame = frame_summary
+                logger.debug(
+                    "websocket_frame_received topic=%s event=%s reference=%s payload_type=%s payload_keys=%s",
+                    topic,
+                    event,
+                    reference,
+                    type(payload).__name__,
+                    payload_keys,
+                )
                 if event == "phx_reply":
+                    self._frame_counters["reply_frames"] += 1
                     future = self._pending.get(str(reference))
                     if future and not future.done():
                         future.set_result(payload)
+                    elif topic == self.HEARTBEAT_TOPIC:
+                        self._frame_counters["heartbeat_replies"] += 1
+                    else:
+                        self._frame_counters["unexpected_frames"] += 1
+                        self._last_unexpected_frame = {
+                            **frame_summary,
+                            "reason": "reply_without_pending_request",
+                        }
+                        logger.warning(
+                            "websocket_reply_without_pending_request topic=%s reference=%s payload_keys=%s",
+                            topic,
+                            reference,
+                            payload_keys,
+                        )
                 elif event in {"phx_error", "phx_close"}:
                     raise WCALiveIntegrationError(
                         f"WCA Live Phoenix {event} topic={topic}: {payload}"
                     )
                 elif topic == self.CONTROL_TOPIC and event == "subscription:data":
+                    self._frame_counters["subscription_data_frames"] += 1
+                    if not isinstance(payload, dict):
+                        self._frame_counters["malformed_frames"] += 1
+                        logger.error(
+                            "subscription_payload_invalid payload_type=%s", type(payload).__name__
+                        )
+                        raise WCALiveIntegrationError(
+                            "WCA Live subscription payload was not an object"
+                        )
                     subscription_id = payload.get("subscriptionId", "")
                     round_id = self._subscription_to_round.get(subscription_id)
                     result = payload.get("result", {})
+                    if not isinstance(result, dict):
+                        self._frame_counters["malformed_frames"] += 1
+                        logger.error(
+                            "subscription_result_invalid subscription_id=%s result_type=%s",
+                            subscription_id,
+                            type(result).__name__,
+                        )
+                        raise WCALiveIntegrationError(
+                            "WCA Live subscription result was not an object"
+                        )
                     if result.get("errors"):
+                        self._frame_counters["subscription_error_frames"] += 1
                         logger.error(
                             "round_subscription_payload_error round_id=%s errors=%s",
                             round_id or "unknown",
@@ -187,11 +291,31 @@ class WCALiveSubscriptionClient:
                         )
                         continue
                     if not round_id:
+                        self._frame_counters["unknown_subscription_ids"] += 1
+                        self._last_unexpected_frame = {
+                            **frame_summary,
+                            "reason": "unknown_subscription_id",
+                        }
                         logger.error(
                             "unknown_subscription_message subscription_id=%s", subscription_id
                         )
                         continue
+                    self._frame_counters["subscription_messages_queued"] += 1
                     await self._messages.put((round_id, result.get("data", result)))
+                else:
+                    self._frame_counters["unexpected_frames"] += 1
+                    self._last_unexpected_frame = {
+                        **frame_summary,
+                        "reason": "unexpected_topic_or_event",
+                    }
+                    logger.warning(
+                        "websocket_frame_ignored topic=%s event=%s reference=%s payload_type=%s payload_keys=%s",
+                        topic,
+                        event,
+                        reference,
+                        type(payload).__name__,
+                        payload_keys,
+                    )
             raise WCALiveIntegrationError("WCA Live closed the subscription socket")
         except asyncio.CancelledError:
             raise
@@ -219,9 +343,7 @@ class WCALiveSubscriptionClient:
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 - surface any heartbeat transport failure.
-            await self._messages.put(
-                WCALiveIntegrationError(f"WCA Live heartbeat failed: {exc}")
-            )
+            await self._messages.put(WCALiveIntegrationError(f"WCA Live heartbeat failed: {exc}"))
 
     async def close(self) -> None:
         if self._heartbeat_task:
