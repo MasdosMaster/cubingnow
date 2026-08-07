@@ -17,7 +17,8 @@ header { background: #fff; }
 .brand { color: inherit; text-decoration: none; font-size: 24px; font-weight: 700; }
 .header-actions { display: flex; align-items: center; gap: 12px; }
 .api-label, small { color: #64748b; font-size: 12px; }
-.theme-toggle { width: 48px; height: 48px; padding: 4px; border: 5px solid #7dd3fc; border-radius: 12px; color: #334155; background: #fff; box-shadow: 0 10px 15px -3px rgb(0 0 0 / .1); cursor: pointer; font-size: 24px; }
+.theme-toggle { width: 50px; height: 50px; padding: 4px; border: 5px solid #7dd3fc; border-radius: 12px; color: #334155; background: #fff; box-shadow: 0 10px 15px -3px rgb(0 0 0 / .1); cursor: pointer; }
+.theme-toggle img { display: block; width: 32px; height: 32px; }
 .theme-toggle:hover { background: #e0f2fe; }
 
 :root[data-theme="dark"] header { background: #1e1b4b; }

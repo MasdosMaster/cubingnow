@@ -3,6 +3,8 @@ import { getIngestionStatus, getRecentRecords, getWeekendCompetitors } from "./a
 import { RecordList } from "./components/RecordList";
 import { NotificationSettings } from "./components/NotificationSettings";
 import { WeekendCompetitorList } from "./components/WeekendCompetitorList";
+import MoonIcon from "./assets/icons/Moon_of_May_complex.svg";
+import SunIcon from "./assets/icons/Sun_of_May_simplified.svg";
 import "./styles.css";
 
 const levels = ["", "WR", "CR", "NR"];
@@ -115,7 +117,11 @@ export default function App() {
               title={darkMode ? "Use light mode" : "Use dark mode"}
               type="button"
             >
-              <span aria-hidden="true">{darkMode ? "☾" : "☀"}</span>
+              <img
+                alt=""
+                aria-hidden="true"
+                src={darkMode ? MoonIcon : SunIcon}
+              />
             </button>
           </div>
         </div>
