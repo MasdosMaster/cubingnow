@@ -86,6 +86,251 @@ class SourceObservation(models.Model):
         ]
 
 
+class ResultIdentityScope(models.Model):
+    """Database-lockable scope used to serialize reconciliation/classification."""
+
+    key = models.CharField(max_length=768, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class CanonicalResult(models.Model):
+    """One real competition result, independently of how many sources observed it."""
+
+    class Kind(models.TextChoices):
+        SINGLE = "single", "Single"
+        AVERAGE = "average", "Average"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        CORRECTED = "corrected", "Corrected"
+        RETRACTED = "retracted", "Retracted"
+
+    class ValidationStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        VERIFIED = "verified", "Verified"
+        REJECTED = "rejected", "Rejected"
+
+    identity_key = models.CharField(max_length=768, unique=True)
+    identity_scope = models.ForeignKey(
+        ResultIdentityScope,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="results",
+    )
+    wca_competition_id = models.CharField(max_length=64, blank=True, db_index=True)
+    competition_name = models.CharField(max_length=255)
+    competition_country_code = models.CharField(max_length=8, blank=True)
+    competition_start_date = models.DateField(null=True, blank=True)
+    competition_end_date = models.DateField(null=True, blank=True)
+    round_id = models.CharField(max_length=64, blank=True)
+    round_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    round_name = models.CharField(max_length=128, blank=True)
+    event_id = models.CharField(max_length=16, db_index=True)
+    event_name = models.CharField(max_length=128)
+    competitor_name = models.CharField(max_length=255)
+    competitor_wca_id = models.CharField(max_length=16, blank=True, db_index=True)
+    country_code = models.CharField(max_length=8, blank=True)
+    kind = models.CharField(max_length=8, choices=Kind.choices)
+    attempt_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    value = models.IntegerField()
+    formatted_result = models.CharField(max_length=128)
+    entered_at = models.DateTimeField(null=True, blank=True)
+    first_observed_at = models.DateTimeField()
+    last_observed_at = models.DateTimeField()
+    source_url = models.URLField(max_length=512, blank=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.ACTIVE
+    )
+    validation_status = models.CharField(
+        max_length=16,
+        choices=ValidationStatus.choices,
+        default=ValidationStatus.PENDING,
+    )
+    validation_reason = models.CharField(max_length=128, blank=True)
+    revision = models.PositiveIntegerField(default=1)
+    current_observation = models.ForeignKey(
+        "ResultObservation",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="current_for_results",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-entered_at", "-first_observed_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["event_id", "kind", "status"],
+                name="canonical_result_scope_idx",
+            )
+        ]
+
+
+class ResultObservation(models.Model):
+    """Current normalized evidence for one source result slot.
+
+    Immutable provider frames remain in :class:`SourceObservation`; this row is the
+    restart-safe normalized projection used by reconciliation.
+    """
+
+    class Source(models.TextChoices):
+        WCA_LIVE = "wca_live", "WCA Live"
+        CUBINGCHINA = "cubingchina", "CubingChina"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        RETRACTED = "retracted", "Retracted"
+
+    observation_key = models.CharField(max_length=768, unique=True)
+    canonical_result = models.ForeignKey(
+        CanonicalResult, on_delete=models.CASCADE, related_name="observations"
+    )
+    raw_observation = models.ForeignKey(
+        SourceObservation,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="normalized_results",
+    )
+    source = models.CharField(max_length=32, choices=Source.choices)
+    ingestion_method = models.CharField(max_length=32)
+    source_result_identity = models.CharField(max_length=255)
+    source_competition_id = models.CharField(max_length=64, blank=True)
+    source_competitor_id = models.CharField(max_length=64, blank=True)
+    kind = models.CharField(max_length=8, choices=CanonicalResult.Kind.choices)
+    attempt_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    value = models.IntegerField()
+    source_record_tag = models.CharField(max_length=8, blank=True)
+    source_claim_trusted = models.BooleanField(default=False)
+    result_evidence_trusted = models.BooleanField(default=False)
+    entered_at = models.DateTimeField(null=True, blank=True)
+    first_observed_at = models.DateTimeField()
+    last_observed_at = models.DateTimeField()
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.ACTIVE
+    )
+    revision = models.PositiveIntegerField(default=1)
+    normalized_payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-last_observed_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["source", "ingestion_method", "source_result_identity"],
+                name="result_observation_source_idx",
+            )
+        ]
+
+
+class Achievement(models.Model):
+    """A classification attached to a canonical result, never a copied result."""
+
+    class Type(models.TextChoices):
+        WORLD = "WR", "World record"
+        CONTINENTAL = "CR", "Continental record"
+        NATIONAL = "NR", "National record"
+        PERSONAL = "PR", "Personal record"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+
+    result = models.ForeignKey(
+        CanonicalResult, on_delete=models.CASCADE, related_name="achievements"
+    )
+    type = models.CharField(max_length=2, choices=Type.choices)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.ACTIVE
+    )
+    classification_reason = models.CharField(max_length=64)
+    source_claim_supported = models.BooleanField(default=False)
+    benchmark_value = models.IntegerField(null=True, blank=True)
+    classified_at = models.DateTimeField()
+    invalidated_at = models.DateTimeField(null=True, blank=True)
+    details = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-classified_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["result", "type"], name="unique_achievement_per_result"
+            )
+        ]
+
+
+class QualificationDecision(models.Model):
+    """Policy output kept separate from mathematical/official classification."""
+
+    achievement = models.OneToOneField(
+        Achievement, on_delete=models.CASCADE, related_name="qualification"
+    )
+    show_on_homepage = models.BooleanField(default=False)
+    homepage_category = models.CharField(max_length=2, blank=True)
+    notification_eligible = models.BooleanField(default=False)
+    homepage_reason = models.CharField(max_length=128, blank=True)
+    notification_reason = models.CharField(max_length=128, blank=True)
+    evaluated_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class RecordBenchmark(models.Model):
+    """Historical record entering live processing; accepted live results are replayed on top."""
+
+    class Level(models.TextChoices):
+        WORLD = "WR", "World"
+        CONTINENTAL = "CR", "Continental"
+        NATIONAL = "NR", "National"
+
+    level = models.CharField(max_length=2, choices=Level.choices)
+    event_id = models.CharField(max_length=16)
+    kind = models.CharField(max_length=8, choices=CanonicalResult.Kind.choices)
+    region_code = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Empty for WR, continent name for CR, ISO country code for NR",
+    )
+    value = models.IntegerField()
+    effective_at = models.DateTimeField(null=True, blank=True)
+    source = models.CharField(max_length=128, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["level", "event_id", "kind", "region_code"],
+                name="unique_record_benchmark_scope",
+            )
+        ]
+
+
+class PersonalBestBaseline(models.Model):
+    competitor_wca_id = models.CharField(max_length=16)
+    event_id = models.CharField(max_length=16)
+    kind = models.CharField(max_length=8, choices=CanonicalResult.Kind.choices)
+    value = models.IntegerField()
+    effective_at = models.DateTimeField(null=True, blank=True)
+    source = models.CharField(max_length=128, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["competitor_wca_id", "event_id", "kind"],
+                name="unique_personal_best_baseline",
+            )
+        ]
+
+
 class RecentRecordObservation(models.Model):
     """A record as independently detected by one experimental pipeline."""
 
@@ -142,6 +387,13 @@ class RecentRecordObservation(models.Model):
     detected_at = models.DateTimeField()
     last_observed_at = models.DateTimeField()
     source_payload = models.JSONField(default=dict)
+    canonical_result = models.ForeignKey(
+        CanonicalResult,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="source_record_projections",
+    )
     persisted_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     withdrawn_at = models.DateTimeField(null=True, blank=True)

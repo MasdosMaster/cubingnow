@@ -8,36 +8,40 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from .models import (
+    Achievement,
     CubingChinaCompetitionTarget,
     CubingChinaRoundTarget,
     IngestionWorkerStatus,
     RecentRecordObservation,
-    Record,
     SubscriptionRound,
 )
-from .serializers import RecentRecordObservationSerializer, RecordSerializer
+from .serializers import AchievementSerializer, RecentRecordObservationSerializer
 
 
 class RecordViewSet(ReadOnlyModelViewSet):
-    serializer_class = RecordSerializer
+    """Public WR/CR/NR/PR projection over canonical achievements."""
+
+    serializer_class = AchievementSerializer
 
     def get_queryset(self):
-        queryset = Record.objects.select_related(
-            "result__competitor", "result__competition"
-        ).all()
+        queryset = (
+            Achievement.objects.select_related("result", "qualification")
+            .prefetch_related("result__observations")
+            .filter(
+                status=Achievement.Status.ACTIVE,
+                qualification__show_on_homepage=True,
+            )
+        )
         level = self.request.query_params.get("level")
-        status = self.request.query_params.get("status", Record.Status.ACTIVE)
         query = self.request.query_params.get("q")
         if level:
-            queryset = queryset.filter(level=level.upper())
-        if status:
-            queryset = queryset.filter(status=status)
+            queryset = queryset.filter(type=level.upper())
         if query:
             queryset = queryset.filter(
-                Q(result__competitor__name__icontains=query)
-                | Q(result__competitor__wca_id__icontains=query)
+                Q(result__competitor_name__icontains=query)
+                | Q(result__competitor_wca_id__icontains=query)
                 | Q(result__event_name__icontains=query)
-                | Q(result__competition__name__icontains=query)
+                | Q(result__competition_name__icontains=query)
             )
         return queryset
 

@@ -35,7 +35,14 @@ class NotificationPreferenceAdmin(admin.ModelAdmin):
 
 @admin.register(NotificationEvent)
 class NotificationEventAdmin(admin.ModelAdmin):
-    list_display = ("id", "notification_type", "occurred_at", "created_at", "correction_count")
+    list_display = (
+        "id",
+        "notification_type",
+        "achievement",
+        "occurred_at",
+        "created_at",
+        "correction_count",
+    )
     list_filter = ("notification_type",)
     search_fields = ("=id", "deduplication_key")
     readonly_fields = ("id", "created_at")

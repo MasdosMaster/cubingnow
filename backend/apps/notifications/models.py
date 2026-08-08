@@ -137,6 +137,13 @@ class NotificationEvent(models.Model):
         on_delete=models.SET_NULL,
         related_name="notification_events",
     )
+    achievement = models.ForeignKey(
+        "records.Achievement",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="notification_events",
+    )
     correction_count = models.PositiveIntegerField(default=0)
     last_correction_at = models.DateTimeField(null=True, blank=True)
 

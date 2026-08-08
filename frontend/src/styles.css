@@ -98,9 +98,15 @@ input[type="search"] { width: min(280px, 40vw); height: 32px; padding: 0 12px; b
 .level-wr { background: #fb7185; }
 .level-cr { color: #000; background: #facc15; }
 .level-nr { background: #22c55e; }
+.level-pr { background: #8b5cf6; }
 .match { color: #a16207; font-size: 11px; font-weight: 750; }
 .match.yes { color: #15803d; }
 .source-link { color: #0284c7; font-size: 11px; font-weight: 700; text-decoration: none; }
+.source-stack { min-width: 0; }
+.source-monitoring { margin: 44px 0; padding: 18px 20px; border: 1px solid #cbd5e1; border-radius: 16px; }
+.source-monitoring > summary { cursor: pointer; font-weight: 750; }
+.source-monitoring > p { color: #64748b; font-size: 13px; line-height: 1.5; }
+.source-monitoring .pipeline-section:last-child { margin-bottom: 12px; }
 .empty, .loading { padding: 58px 0; text-align: center; color: #64748b; border: 1px solid #cbd5e1; border-radius: 16px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / .1); }
 .empty h3 { color: inherit; }
 .error { padding: 12px; border-radius: 12px; color: #991b1b; background: #fee2e2; }

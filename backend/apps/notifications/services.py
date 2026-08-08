@@ -2,8 +2,10 @@ import logging
 import random
 import socket
 from datetime import timedelta
+from types import SimpleNamespace
 
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import connection, transaction
 from django.db.models import F, Q
 from django.utils import timezone
@@ -192,6 +194,73 @@ def publish_record_notification(
     return event, False
 
 
+def publish_achievement_notification(achievement):
+    """Publish policy-approved canonical achievement through the existing outbox."""
+
+    from apps.records.models import Achievement
+
+    if achievement.status != Achievement.Status.ACTIVE:
+        return None, False
+    try:
+        qualification = achievement.qualification
+    except ObjectDoesNotExist:
+        return None, False
+    if not qualification.notification_eligible:
+        return None, False
+
+    result = achievement.result
+    proxy = SimpleNamespace(
+        pk=None,
+        canonical_key=f"achievement:{result.identity_key}|{achievement.type}",
+        record_level=achievement.type,
+        event_id=result.event_id,
+        event_name=result.event_name,
+        formatted_result=result.formatted_result,
+        competitor_name=result.competitor_name,
+        country_code=result.country_code,
+        competition_country_code=result.competition_country_code,
+        competition_name=result.competition_name,
+        kind=result.kind,
+        detected_at=result.entered_at or result.first_observed_at,
+        source_payload={},
+    )
+    event, created = publish_record_notification(proxy)
+    updates = []
+    if event.achievement_id != achievement.pk:
+        event.achievement = achievement
+        updates.append("achievement")
+    source_record = result.source_record_projections.order_by("detected_at", "pk").first()
+    if source_record and event.source_record_id != source_record.pk:
+        event.source_record = source_record
+        updates.append("source_record")
+    if updates:
+        event.save(update_fields=updates)
+    return event, created
+
+
+def publish_achievements_after_commit(achievement_ids) -> None:
+    ids = tuple(sorted(set(achievement_ids)))
+    if not ids:
+        return
+
+    def publish_safely():
+        from apps.records.models import Achievement
+
+        achievements = Achievement.objects.select_related(
+            "result", "qualification"
+        ).filter(pk__in=ids)
+        for achievement in achievements:
+            try:
+                publish_achievement_notification(achievement)
+            except Exception:
+                logger.exception(
+                    "achievement_notification_publication_failed achievement_id=%s",
+                    achievement.pk,
+                )
+
+    transaction.on_commit(publish_safely)
+
+
 def record_source_is_enabled(ingestion_method: str) -> bool:
     configured = settings.PUSH_RECORD_EVENT_SOURCE
     return configured == ingestion_method or configured == "all"
@@ -202,13 +271,29 @@ def publish_record_after_commit(record_id: int, ingestion_method: str) -> None:
         return
 
     def publish_safely():
-        from apps.records.models import RecentRecordObservation
+        from apps.records.models import Achievement, RecentRecordObservation
 
         try:
-            record = RecentRecordObservation.objects.get(pk=record_id)
-            if record.status != RecentRecordObservation.Status.ACTIVE:
+            record = RecentRecordObservation.objects.select_related(
+                "canonical_result"
+            ).get(pk=record_id)
+            if (
+                record.status != RecentRecordObservation.Status.ACTIVE
+                or record.canonical_result_id is None
+            ):
                 return
-            publish_record_notification(record)
+            achievement = (
+                Achievement.objects.select_related("result", "qualification")
+                .filter(
+                    result_id=record.canonical_result_id,
+                    type=record.record_level,
+                    status=Achievement.Status.ACTIVE,
+                    qualification__notification_eligible=True,
+                )
+                .first()
+            )
+            if achievement:
+                publish_achievement_notification(achievement)
         except Exception:
             logger.exception(
                 "notification_event_publication_failed record_id=%s ingestion_method=%s",

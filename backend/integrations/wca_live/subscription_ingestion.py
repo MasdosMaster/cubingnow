@@ -11,8 +11,13 @@ from apps.records.models import (
     SubscriptionResultState,
     SubscriptionRound,
 )
+from apps.records.reconciliation import (
+    reconcile_result_observation,
+    retract_result_observation,
+)
 
 from .ingestion import RECORD_LEVELS, persist_record_candidate, store_observation
+from .observations import result_observations
 from .result_values import is_complete
 from .schemas import NormalizedRoundResult, RecordCandidate
 from .snapshots import diff_snapshots, normalize_round_snapshot
@@ -105,7 +110,10 @@ def _withdraw_other_states(
 
 
 def _synchronize_result_records(
-    target: SubscriptionRound, result: NormalizedRoundResult, observed_at
+    target: SubscriptionRound,
+    result: NormalizedRoundResult,
+    observed_at,
+    raw_observation=None,
 ) -> tuple[int, int]:
     detected = 0
     withdrawn = 0
@@ -120,9 +128,35 @@ def _synchronize_result_records(
         )
         if active_level:
             candidate = _candidate(target, result, kind, int(value), active_level, observed_at)
-            _observation, created = persist_record_candidate(candidate, METHOD, result.payload)
+            _observation, created = persist_record_candidate(
+                candidate,
+                METHOD,
+                result.payload,
+                raw_observation=raw_observation,
+                reconcile=False,
+            )
             detected += int(created)
     return detected, withdrawn
+
+
+def _synchronize_normalized_observations(
+    target,
+    previous: NormalizedRoundResult | None,
+    current: NormalizedRoundResult,
+    observed_at,
+    raw_observation,
+) -> None:
+    current_rows = result_observations(
+        target, current, observed_at, raw_observation.pk
+    )
+    current_keys = {row.observation_key for row in current_rows}
+    for row in current_rows:
+        reconcile_result_observation(row)
+    if previous is not None:
+        previous_rows = result_observations(target, previous, observed_at)
+        for row in previous_rows:
+            if row.observation_key not in current_keys:
+                retract_result_observation(row.observation_key, observed_at)
 
 
 def _persist_state(
@@ -212,14 +246,24 @@ def process_round_snapshot(
                     result.entered_at and result.entered_at >= catchup_threshold
                 )
             if should_evaluate:
-                detected, withdrawn = _synchronize_result_records(target, result, observed_at)
+                detected, withdrawn = _synchronize_result_records(
+                    target, result, observed_at, source_observation
+                )
                 records_detected += detected
                 records_withdrawn += withdrawn
+                _synchronize_normalized_observations(
+                    target,
+                    previous.get(result_id),
+                    result,
+                    observed_at,
+                    source_observation,
+                )
             _persist_state(target, result, observed_at)
 
         if diff.removals:
             removed_states = target.result_states.filter(result_id__in=diff.removals, active=True)
             for state in removed_states:
+                stored = _stored_result(state)
                 records_withdrawn += _withdraw_other_states(
                     state.stable_result_identity,
                     RecentRecordObservation.Kind.SINGLE,
@@ -230,6 +274,8 @@ def process_round_snapshot(
                     RecentRecordObservation.Kind.AVERAGE,
                     observed_at,
                 )
+                for row in result_observations(target, stored, observed_at):
+                    retract_result_observation(row.observation_key, observed_at)
             removed_states.update(active=False, last_observed_at=observed_at, processed_at=observed_at)
 
         target.last_message_at = observed_at

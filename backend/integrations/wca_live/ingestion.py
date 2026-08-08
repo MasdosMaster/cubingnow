@@ -6,12 +6,13 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-from apps.notifications.services import publish_record_after_commit
+from apps.records.domain import NormalizedResultObservation
 from apps.records.models import (
     IngestionRun,
     RecentRecordObservation,
     SourceObservation,
 )
+from apps.records.reconciliation import reconcile_result_observation
 
 from .mappers import map_record
 from .result_values import format_result, is_complete
@@ -75,6 +76,9 @@ def persist_record_candidate(
     candidate: RecordCandidate,
     ingestion_method: str,
     source_payload: dict,
+    *,
+    raw_observation: SourceObservation | None = None,
+    reconcile: bool = True,
 ) -> tuple[RecentRecordObservation, bool]:
     if candidate.record_level not in RECORD_LEVELS:
         raise ValueError(f"Unsupported WCA record level: {candidate.record_level!r}")
@@ -164,7 +168,44 @@ def persist_record_candidate(
         observation.last_observed_at = candidate.observed_at
         observation.source_payload = source_payload
         observation.save()
-    publish_record_after_commit(observation.pk, ingestion_method)
+    if reconcile:
+        normalized = NormalizedResultObservation(
+            source=candidate.source,
+            ingestion_method=ingestion_method,
+            source_result_identity=candidate.stable_result_identity,
+            source_competition_id=(
+                candidate.source_competition_id or candidate.wca_live_competition_id
+            ),
+            source_competitor_id=(
+                candidate.source_competitor_id or candidate.competitor_wca_live_id
+            ),
+            wca_competition_id=candidate.wca_competition_id,
+            competition_name=candidate.competition_name,
+            competition_country_code=candidate.competition_country_code,
+            competition_start_date=candidate.competition_start_date,
+            competition_end_date=candidate.competition_end_date,
+            round_id=candidate.round_id,
+            round_number=candidate.round_number,
+            round_name=candidate.round_name,
+            event_id=candidate.event_id,
+            event_name=candidate.event_name,
+            competitor_name=candidate.competitor_name,
+            competitor_wca_id=candidate.competitor_wca_id,
+            country_code=candidate.country_code,
+            kind=candidate.kind,
+            value=candidate.raw_result,
+            attempt_number=None,
+            source_record_tag=candidate.record_level,
+            entered_at=candidate.source_update_timestamp,
+            observed_at=candidate.observed_at,
+            source_url=candidate.source_url,
+            normalized_payload=source_payload,
+            raw_observation_id=getattr(raw_observation, "pk", None),
+        )
+        result_observation = reconcile_result_observation(normalized)
+        if observation.canonical_result_id != result_observation.canonical_result_id:
+            observation.canonical_result = result_observation.canonical_result
+            observation.save(update_fields=["canonical_result"])
     return observation, created
 
 
@@ -196,6 +237,7 @@ def ingest_api_record(
             item,
             RecentRecordObservation.IngestionMethod.API_POLLING,
             payload,
+            raw_observation=observation,
         )
         if not observation.processed_at:
             observation.processed_at = timezone.now()

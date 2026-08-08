@@ -11,6 +11,10 @@ from apps.records.models import (
     IngestionWorkerStatus,
     RecentRecordObservation,
 )
+from apps.records.reconciliation import (
+    reconcile_result_observation,
+    retract_result_observation,
+)
 from integrations.wca_live.ingestion import (
     RECORD_LEVELS,
     persist_record_candidate,
@@ -21,6 +25,7 @@ from integrations.wca_live.schemas import RecordCandidate
 
 from .live_schemas import NormalizedCubingChinaResult
 from .live_snapshots import diff_snapshots, normalize_result, normalize_snapshot
+from .observations import result_observations
 
 logger = logging.getLogger(__name__)
 METHOD = RecentRecordObservation.IngestionMethod.CUBINGCHINA_WEBSOCKET
@@ -110,7 +115,9 @@ def _withdraw_other_states(
     )
 
 
-def _synchronize_records(target, result, observed_at) -> tuple[int, int]:
+def _synchronize_records(
+    target, result, observed_at, raw_observation=None
+) -> tuple[int, int]:
     detected = 0
     withdrawn = 0
     pairs = (
@@ -131,9 +138,34 @@ def _synchronize_records(target, result, observed_at) -> tuple[int, int]:
         )
         if active_level:
             candidate = _candidate(target, result, kind, int(value), active_level, observed_at)
-            _observation, created = persist_record_candidate(candidate, METHOD, result.payload)
+            _observation, created = persist_record_candidate(
+                candidate,
+                METHOD,
+                result.payload,
+                raw_observation=raw_observation,
+                reconcile=False,
+            )
             detected += int(created)
     return detected, withdrawn
+
+
+def _synchronize_normalized_observations(
+    target,
+    previous: NormalizedCubingChinaResult | None,
+    current: NormalizedCubingChinaResult,
+    observed_at,
+    raw_observation,
+) -> None:
+    current_rows = result_observations(
+        target, current, observed_at, raw_observation.pk
+    )
+    current_keys = {row.observation_key for row in current_rows}
+    for row in current_rows:
+        reconcile_result_observation(row)
+    if previous is not None:
+        for row in result_observations(target, previous, observed_at):
+            if row.observation_key not in current_keys:
+                retract_result_observation(row.observation_key, observed_at)
 
 
 def _persist_state(target, result, observed_at) -> None:
@@ -244,15 +276,25 @@ def process_round_snapshot(
         process_ids = set(diff.additions) | set(diff.changes)
         for result_id, result in current.items():
             if initial_snapshot or result_id in process_ids:
-                detected, withdrawn = _synchronize_records(target, result, observed_at)
+                detected, withdrawn = _synchronize_records(
+                    target, result, observed_at, source_observation
+                )
                 records_detected += detected
                 records_withdrawn += withdrawn
+                _synchronize_normalized_observations(
+                    target,
+                    previous.get(result_id),
+                    result,
+                    observed_at,
+                    source_observation,
+                )
             _persist_state(target, result, observed_at)
         if diff.removals:
             removed_states = target.result_states.filter(
                 result_id__in=diff.removals, active=True
             )
             for state in removed_states:
+                stored = _stored_result(state)
                 for kind in (
                     RecentRecordObservation.Kind.SINGLE,
                     RecentRecordObservation.Kind.AVERAGE,
@@ -260,6 +302,8 @@ def process_round_snapshot(
                     records_withdrawn += _withdraw_other_states(
                         state.stable_result_identity, kind, observed_at
                     )
+                for row in result_observations(target, stored, observed_at):
+                    retract_result_observation(row.observation_key, observed_at)
             removed_states.update(
                 active=False,
                 last_observed_at=observed_at,
@@ -321,7 +365,14 @@ def process_result_update(
         records_withdrawn = 0
         if changed:
             records_detected, records_withdrawn = _synchronize_records(
-                target, result, observed_at
+                target, result, observed_at, source_observation
+            )
+            _synchronize_normalized_observations(
+                target,
+                _stored_result(state) if state is not None else None,
+                result,
+                observed_at,
+                source_observation,
             )
         _persist_state(target, result, observed_at)
         _mark_snapshot_success(target, observed_at)

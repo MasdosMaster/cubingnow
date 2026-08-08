@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { getIngestionStatus, getRecentRecords, getWeekendCompetitors } from "./api/client";
+import { getIngestionStatus, getRecentRecords, getRecords, getWeekendCompetitors } from "./api/client";
+import { AchievementList } from "./components/AchievementList";
 import { RecordList } from "./components/RecordList";
 import { NotificationSettings } from "./components/NotificationSettings";
 import { WeekendCompetitorList } from "./components/WeekendCompetitorList";
@@ -7,7 +8,7 @@ import MoonIcon from "./assets/icons/Moon_of_May_complex.svg";
 import SunIcon from "./assets/icons/Sun_of_May_simplified.svg";
 import "./styles.css";
 
-const levels = ["", "WR", "CR", "NR"];
+const levels = ["WR", "CR", "NR", "PR"];
 const REFRESH_INTERVAL_MS = 30_000;
 
 function usePipelineRecords(source, level, query) {
@@ -35,6 +36,36 @@ function usePipelineRecords(source, level, query) {
   }, [source, level, query]);
 
   return state;
+}
+
+function useAchievementRecords(level, query) {
+  const [state, setState] = useState({ records: [], loading: true, error: "" });
+
+  useEffect(() => {
+    let current = true;
+    const refresh = async (showLoading = false) => {
+      if (showLoading) setState((previous) => ({ ...previous, loading: true }));
+      try {
+        const records = await getRecords({ level, query });
+        if (current) setState({ records, loading: false, error: "" });
+      } catch (reason) {
+        if (current) setState((previous) => ({ ...previous, loading: false, error: reason.message }));
+      }
+    };
+    refresh(true);
+    const interval = window.setInterval(() => refresh(false), REFRESH_INTERVAL_MS);
+    return () => {
+      current = false;
+      window.clearInterval(interval);
+    };
+  }, [level, query]);
+
+  return state;
+}
+
+function PublicAchievementSection({ level, query }) {
+  const state = useAchievementRecords(level, query);
+  return <AchievementList level={level} {...state} />;
 }
 
 function useWeekendCompetitors(continent) {
@@ -66,14 +97,13 @@ function useWeekendCompetitors(continent) {
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem("cubingnow-theme") === "dark");
-  const [level, setLevel] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState(null);
   const [statusError, setStatusError] = useState("");
   const [continent, setContinent] = useState("");
-  const api = usePipelineRecords("api_polling", level, query);
-  const subscriptions = usePipelineRecords("graphql_subscription", level, query);
-  const cubingChina = usePipelineRecords("cubingchina_websocket", level, query);
+  const api = usePipelineRecords("api_polling", "", query);
+  const subscriptions = usePipelineRecords("graphql_subscription", "", query);
+  const cubingChina = usePipelineRecords("cubingchina_websocket", "", query);
   const weekendCompetitors = useWeekendCompetitors(continent);
 
   useEffect(() => {
@@ -108,7 +138,7 @@ export default function App() {
         <div className="header-inner">
           <a className="brand" href="/">CubingNow</a>
           <div className="header-actions">
-            <span className="api-label">WCA Live verification experiment</span>
+            <span className="api-label">Live cubing achievements</span>
             <button
               aria-label={darkMode ? "Use light mode" : "Use dark mode"}
               aria-pressed={darkMode}
@@ -128,33 +158,35 @@ export default function App() {
       </header>
       <main>
         <section className="heading">
-          <div><p className="eyebrow">Independent observations</p><h1>Recent WCA records</h1></div>
+          <div><p className="eyebrow">Reconciled live results</p><h1>Recent cubing achievements</h1></div>
           <input aria-label="Search records" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records" />
         </section>
-        <nav className="filters" aria-label="Record level">
-          {levels.map((item) => <button className={level === item ? "active" : ""} key={item || "all"} onClick={() => setLevel(item)}>{item || "All"}</button>)}
-        </nav>
         <NotificationSettings />
         {statusError && <p className="status-warning">Worker health unavailable: {statusError}</p>}
-        <RecordList
-          title="Recent records — GraphQL subscriptions"
-          subtitle="Persisted full-round snapshot diffs"
-          {...subscriptions}
-          worker={status?.graphql_subscription}
-          roundStatus={status?.subscription_rounds}
-        />
-        <RecordList
-          title="Recent records — API polling"
-          subtitle="WCA Live recentRecords query"
-          {...api}
-          worker={status?.api_polling}
-        />
-        <RecordList
-          title="Recent records — CubingChina live"
-          subtitle="CubingChina competition WebSocket"
-          {...cubingChina}
-          worker={status?.cubingchina_websocket}
-        />
+        {levels.map((item) => <PublicAchievementSection key={item} level={item} query={query} />)}
+        <details className="source-monitoring">
+          <summary>Source monitoring and provider claims</summary>
+          <p>These debugging projections show what each provider reported. They are evidence, not CubingNow&apos;s classification.</p>
+          <RecordList
+            title="Source observations — WCA Live GraphQL"
+            subtitle="Persisted full-round snapshot diffs"
+            {...subscriptions}
+            worker={status?.graphql_subscription}
+            roundStatus={status?.subscription_rounds}
+          />
+          <RecordList
+            title="Source observations — WCA Live API"
+            subtitle="WCA Live recentRecords query"
+            {...api}
+            worker={status?.api_polling}
+          />
+          <RecordList
+            title="Source observations — CubingChina"
+            subtitle="Untrusted provider claims retained for comparison"
+            {...cubingChina}
+            worker={status?.cubingchina_websocket}
+          />
+        </details>
         <WeekendCompetitorList
           {...weekendCompetitors}
           continent={continent}

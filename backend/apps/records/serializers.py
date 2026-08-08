@@ -3,7 +3,7 @@ from rest_framework import serializers
 from apps.competitions.serializers import CompetitionSerializer
 from apps.competitors.serializers import CompetitorSerializer
 
-from .models import RecentRecordObservation, Record
+from .models import Achievement, RecentRecordObservation, Record
 
 
 class RecordSerializer(serializers.ModelSerializer):
@@ -51,6 +51,7 @@ class RecentRecordObservationSerializer(serializers.ModelSerializer):
             "id",
             "stable_result_identity",
             "canonical_key",
+            "canonical_result",
             "ingestion_method",
             "source",
             "source_name",
@@ -143,3 +144,126 @@ class RecentRecordObservationSerializer(serializers.ModelSerializer):
                 (obj.detected_at - row["detected_at"]).total_seconds(),
             )
         return deltas
+
+
+class AchievementSerializer(serializers.ModelSerializer):
+    canonical_result_id = serializers.IntegerField(source="result_id", read_only=True)
+    canonical_key = serializers.CharField(source="result.identity_key", read_only=True)
+    record_level = serializers.CharField(source="type", read_only=True)
+    validation_status = serializers.CharField(
+        source="result.validation_status", read_only=True
+    )
+    validation_reason = serializers.CharField(
+        source="result.validation_reason", read_only=True
+    )
+    wca_competition_id = serializers.CharField(
+        source="result.wca_competition_id", read_only=True
+    )
+    competition_name = serializers.CharField(
+        source="result.competition_name", read_only=True
+    )
+    round_id = serializers.CharField(source="result.round_id", read_only=True)
+    round_number = serializers.IntegerField(
+        source="result.round_number", read_only=True, allow_null=True
+    )
+    round_name = serializers.CharField(source="result.round_name", read_only=True)
+    event_id = serializers.CharField(source="result.event_id", read_only=True)
+    event_name = serializers.CharField(source="result.event_name", read_only=True)
+    competitor_name = serializers.CharField(
+        source="result.competitor_name", read_only=True
+    )
+    competitor_wca_id = serializers.CharField(
+        source="result.competitor_wca_id", read_only=True
+    )
+    country_code = serializers.CharField(source="result.country_code", read_only=True)
+    kind = serializers.CharField(source="result.kind", read_only=True)
+    attempt_number = serializers.IntegerField(
+        source="result.attempt_number", read_only=True, allow_null=True
+    )
+    raw_result = serializers.IntegerField(source="result.value", read_only=True)
+    formatted_result = serializers.CharField(
+        source="result.formatted_result", read_only=True
+    )
+    entered_at = serializers.DateTimeField(
+        source="result.entered_at", read_only=True, allow_null=True
+    )
+    observed_at = serializers.DateTimeField(
+        source="result.first_observed_at", read_only=True
+    )
+    detected_at = serializers.SerializerMethodField()
+    source_url = serializers.CharField(source="result.source_url", read_only=True)
+    sources = serializers.SerializerMethodField()
+    source_claims = serializers.SerializerMethodField()
+    homepage_reason = serializers.CharField(
+        source="qualification.homepage_reason", read_only=True
+    )
+    notification_eligible = serializers.BooleanField(
+        source="qualification.notification_eligible", read_only=True
+    )
+    notification_reason = serializers.CharField(
+        source="qualification.notification_reason", read_only=True
+    )
+
+    class Meta:
+        model = Achievement
+        fields = [
+            "id",
+            "canonical_result_id",
+            "canonical_key",
+            "record_level",
+            "status",
+            "classification_reason",
+            "source_claim_supported",
+            "benchmark_value",
+            "validation_status",
+            "validation_reason",
+            "wca_competition_id",
+            "competition_name",
+            "round_id",
+            "round_number",
+            "round_name",
+            "event_id",
+            "event_name",
+            "competitor_name",
+            "competitor_wca_id",
+            "country_code",
+            "kind",
+            "attempt_number",
+            "raw_result",
+            "formatted_result",
+            "entered_at",
+            "observed_at",
+            "detected_at",
+            "source_url",
+            "sources",
+            "source_claims",
+            "homepage_reason",
+            "notification_eligible",
+            "notification_reason",
+        ]
+
+    @staticmethod
+    def get_detected_at(obj):
+        return obj.result.entered_at or obj.result.first_observed_at
+
+    @staticmethod
+    def get_sources(obj):
+        return sorted(
+            set(obj.result.observations.values_list("ingestion_method", flat=True))
+        )
+
+    @staticmethod
+    def get_source_claims(obj):
+        return [
+            {
+                "ingestion_method": row.ingestion_method,
+                "source_record_tag": row.source_record_tag or None,
+                "claim_trusted": row.source_claim_trusted,
+                "result_evidence_trusted": row.result_evidence_trusted,
+                "entered_at": row.entered_at,
+                "observed_at": row.last_observed_at,
+            }
+            for row in obj.result.observations.all().order_by(
+                "ingestion_method", "attempt_number", "pk"
+            )
+        ]

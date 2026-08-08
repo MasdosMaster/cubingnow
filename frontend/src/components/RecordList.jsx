@@ -51,7 +51,7 @@ export function RecordList({ title, subtitle, records, loading, error, worker, r
             <div className="record-table" role="table" aria-label={title}>
               <div className="record-header" role="row">
                 <span>Level</span><span>Event / type</span><span>Result</span><span>Competitor</span>
-                <span>Competition</span><span>Round</span><span>Detected</span><span>Match</span><span>Source</span>
+                <span>Competition</span><span>Round</span><span>Entered / observed</span><span>Match</span><span>Source</span>
               </div>
               {records.map((record) => (
                 <article className={`record-row ${record.status === "withdrawn" ? "withdrawn" : ""}`} role="row" key={record.id}>
@@ -61,8 +61,9 @@ export function RecordList({ title, subtitle, records, loading, error, worker, r
                   <div><strong>{record.competitor_name}</strong><small>{flag(record.country_code)} {record.competitor_wca_id}</small></div>
                   <div><strong>{record.competition_name}</strong><small>{record.wca_competition_id}</small></div>
                   <div><strong>{record.round_name || "—"}</strong><small>{record.round_id || ""}</small></div>
-                  <time className="detected-age" dateTime={record.detected_at} title={absoluteTime(record.detected_at)}>
-                    {formatDetectedAge(record.detected_at)}<small>{absoluteTime(record.detected_at)}</small>
+                  <time className="detected-age" dateTime={record.source_update_timestamp || record.detected_at} title={absoluteTime(record.source_update_timestamp || record.detected_at)}>
+                    {formatDetectedAge(record.source_update_timestamp || record.detected_at)}
+                    <small>Observed {absoluteTime(record.detected_at)}</small>
                   </time>
                   <span className={record.matched_in_other_pipeline ? "match yes" : "match"}>{record.matched_in_other_pipeline ? "Matched" : "Waiting"}</span>
                   {record.source_url ? <a className="source-link" href={record.source_url} target="_blank" rel="noreferrer">{sourceName(record)} ↗</a> : <span>—</span>}

@@ -13,7 +13,7 @@ afterEach(() => {
 
 
 describe("homepage", () => {
-  it("renders the weekend table underneath all three record tables", async () => {
+  it("renders canonical achievement tables and keeps source monitoring available", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url) => {
       if (url.includes("ingestion-status")) {
         return { ok: true, json: async () => ({}) };
@@ -39,12 +39,17 @@ describe("homepage", () => {
       const headings = Array.from(document.querySelectorAll("main h2")).map((node) => node.textContent);
       expect(headings).toEqual([
         "Record alerts",
-        "Recent records — GraphQL subscriptions",
-        "Recent records — API polling",
-        "Recent records — CubingChina live",
+        "World records",
+        "Continental records",
+        "National records",
+        "Personal records",
+        "Source observations — WCA Live GraphQL",
+        "Source observations — WCA Live API",
+        "Source observations — CubingChina",
         "Competing this weekend"
       ]);
     });
+    expect(screen.getByText("Source monitoring and provider claims")).toBeTruthy();
   });
 
   it("uses the newly backend-ranked payload when a continent filter changes", async () => {
