@@ -101,6 +101,7 @@ def persist_record_candidate(
             "wca_live_competition_id": candidate.wca_live_competition_id,
             "wca_competition_id": candidate.wca_competition_id,
             "competition_name": candidate.competition_name,
+            "competition_country_code": candidate.competition_country_code,
             "competition_start_date": candidate.competition_start_date,
             "competition_end_date": candidate.competition_end_date,
             "round_id": candidate.round_id,
@@ -140,6 +141,7 @@ def persist_record_candidate(
         observation.wca_live_competition_id = candidate.wca_live_competition_id
         observation.wca_competition_id = candidate.wca_competition_id
         observation.competition_name = candidate.competition_name
+        observation.competition_country_code = candidate.competition_country_code
         observation.competition_start_date = candidate.competition_start_date
         observation.competition_end_date = candidate.competition_end_date
         observation.round_id = candidate.round_id

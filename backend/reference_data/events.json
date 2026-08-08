@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "events": {
+    "333": {
+      "wca_id": "333",
+      "wca_name": "3x3x3 Cube",
+      "display_name": "3x3",
+      "short_name": "3x3",
+      "compact_name": "3x3",
+      "icon_key": "333"
+    },
+    "222": {
+      "wca_id": "222",
+      "wca_name": "2x2x2 Cube",
+      "display_name": "2x2",
+      "short_name": "2x2",
+      "compact_name": "2x2",
+      "icon_key": "222"
+    },
+    "444": {
+      "wca_id": "444",
+      "wca_name": "4x4x4 Cube",
+      "display_name": "4x4",
+      "short_name": "4x4",
+      "compact_name": "4x4",
+      "icon_key": "444"
+    },
+    "555": {
+      "wca_id": "555",
+      "wca_name": "5x5x5 Cube",
+      "display_name": "5x5",
+      "short_name": "5x5",
+      "compact_name": "5x5",
+      "icon_key": "555"
+    },
+    "666": {
+      "wca_id": "666",
+      "wca_name": "6x6x6 Cube",
+      "display_name": "6x6",
+      "short_name": "6x6",
+      "compact_name": "6x6",
+      "icon_key": "666"
+    },
+    "777": {
+      "wca_id": "777",
+      "wca_name": "7x7x7 Cube",
+      "display_name": "7x7",
+      "short_name": "7x7",
+      "compact_name": "7x7",
+      "icon_key": "777"
+    },
+    "333bf": {
+      "wca_id": "333bf",
+      "wca_name": "3x3x3 Blindfolded",
+      "display_name": "3x3 Blindfolded",
+      "short_name": "3x3 BLD",
+      "compact_name": "3BLD",
+      "icon_key": "333bf"
+    },
+    "333fm": {
+      "wca_id": "333fm",
+      "wca_name": "3x3x3 Fewest Moves",
+      "display_name": "3x3 Fewest Moves",
+      "short_name": "3x3 FMC",
+      "compact_name": "FMC",
+      "icon_key": "333fm"
+    },
+    "333oh": {
+      "wca_id": "333oh",
+      "wca_name": "3x3x3 One-Handed",
+      "display_name": "3x3 One-Handed",
+      "short_name": "3x3 OH",
+      "compact_name": "OH",
+      "icon_key": "333oh"
+    },
+    "clock": {
+      "wca_id": "clock",
+      "wca_name": "Clock",
+      "display_name": "Clock",
+      "short_name": "Clock",
+      "compact_name": "Clock",
+      "icon_key": "clock"
+    },
+    "minx": {
+      "wca_id": "minx",
+      "wca_name": "Megaminx",
+      "display_name": "Megaminx",
+      "short_name": "Megaminx",
+      "compact_name": "Mega",
+      "icon_key": "minx"
+    },
+    "pyram": {
+      "wca_id": "pyram",
+      "wca_name": "Pyraminx",
+      "display_name": "Pyraminx",
+      "short_name": "Pyraminx",
+      "compact_name": "Pyra",
+      "icon_key": "pyram"
+    },
+    "skewb": {
+      "wca_id": "skewb",
+      "wca_name": "Skewb",
+      "display_name": "Skewb",
+      "short_name": "Skewb",
+      "compact_name": "Skewb",
+      "icon_key": "skewb"
+    },
+    "sq1": {
+      "wca_id": "sq1",
+      "wca_name": "Square-1",
+      "display_name": "Square-1",
+      "short_name": "Square-1",
+      "compact_name": "SQ-1",
+      "icon_key": "sq1"
+    },
+    "444bf": {
+      "wca_id": "444bf",
+      "wca_name": "4x4x4 Blindfolded",
+      "display_name": "4x4 Blindfolded",
+      "short_name": "4x4 BLD",
+      "compact_name": "4BLD",
+      "icon_key": "444bf"
+    },
+    "555bf": {
+      "wca_id": "555bf",
+      "wca_name": "5x5x5 Blindfolded",
+      "display_name": "5x5 Blindfolded",
+      "short_name": "5x5 BLD",
+      "compact_name": "5BLD",
+      "icon_key": "555bf"
+    },
+    "333mbf": {
+      "wca_id": "333mbf",
+      "wca_name": "3x3x3 Multi-Blind",
+      "display_name": "3x3 Multi-Blind",
+      "short_name": "3x3 MBLD",
+      "compact_name": "MBLD",
+      "icon_key": "333mbf"
+    },
+    "333mbo": {
+      "wca_id": "333mbo",
+      "wca_name": "3x3x3 Multi-Blind Old Style",
+      "display_name": "3x3 Old Multi-Blind",
+      "short_name": "3x3 MBO",
+      "compact_name": "MBO",
+      "icon_key": "333mbo"
+    },
+    "333ft": {
+      "wca_id": "333ft",
+      "wca_name": "3x3x3 With Feet",
+      "display_name": "3x3 With Feet",
+      "short_name": "3x3 Feet",
+      "compact_name": "Feet",
+      "icon_key": "333ft"
+    },
+    "magic": {
+      "wca_id": "magic",
+      "wca_name": "Magic",
+      "display_name": "Magic",
+      "short_name": "Magic",
+      "compact_name": "Magic",
+      "icon_key": "magic"
+    },
+    "mmagic": {
+      "wca_id": "mmagic",
+      "wca_name": "Master Magic",
+      "display_name": "Master Magic",
+      "short_name": "Master Magic",
+      "compact_name": "MMagic",
+      "icon_key": "mmagic"
+    }
+  }
+}

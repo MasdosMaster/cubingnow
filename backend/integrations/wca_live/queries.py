@@ -66,6 +66,7 @@ query CubeRecordCompetitionRounds($id: ID!) {
     name
     startDate
     endDate
+    venues { country { iso2 } }
     competitionEvents {
       event { id name }
       rounds { id number name }

@@ -12,6 +12,7 @@ class RoundTarget:
     competition_end_date: date
     event_id: str
     event_name: str
+    competition_country_code: str = ""
     round_number: int | None = None
     round_name: str = ""
 
@@ -63,6 +64,7 @@ class RecordCandidate:
     source_result_id: str = ""
     source_competition_id: str = ""
     source_competitor_id: str = ""
+    competition_country_code: str = ""
 
 
 # Compatibility name used by the existing integration boundary.

@@ -84,6 +84,7 @@ def record(*, level="WR", canonical_key="wca|TestOpen2026|2020TEST01|333|1|singl
         formatted_result="3.91",
         competitor_name="Test Cuber",
         country_code="NL",
+        competition_country_code="ES",
         competition_name="Test Open 2026",
         kind="single",
         detected_at=timezone.now(),
@@ -126,14 +127,27 @@ def event_and_delivery(item=None):
 
 
 @pytest.mark.django_db
-def test_national_record_notification_uses_nr_and_country_code():
+def test_notification_uses_reference_labels_and_template():
     event, created = publish_record_notification(
         record(level="NR", canonical_key="wca|TestOpen2026|2020TEST01|333|1|single|NR")
     )
 
     assert created is True
-    assert event.payload["title"] == "New 3×3×3 NR (NL)"
+    assert event.payload["title"] == "3x3 single: 3.91"
+    assert event.payload["body"] == (
+        "By Test Cuber from Netherlands at Test Open 2026 in Spain"
+    )
     assert event.payload["country_code"] == "NL"
+    assert event.payload["icon"] == "/notification_icons/notification_icon_NR.png"
+
+
+@pytest.mark.django_db
+def test_continental_record_notification_uses_competitor_continent_icon():
+    event, _created = publish_record_notification(
+        record(level="CR", canonical_key="wca|TestOpen2026|2020TEST01|333|1|single|CR")
+    )
+
+    assert event.payload["icon"] == "/notification_icons/notification_icon_ER.png"
 
 
 @pytest.mark.django_db

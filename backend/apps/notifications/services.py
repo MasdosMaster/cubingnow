@@ -78,6 +78,7 @@ def _record_domain_values(record) -> dict:
         "competitor_name": record.competitor_name,
         "country_code": record.country_code,
         "competition_name": record.competition_name,
+        "competition_country_code": record.competition_country_code,
         "kind": record.kind,
     }
 
@@ -90,6 +91,7 @@ def _event_domain_values(payload: dict) -> dict:
         "competitor_name": payload.get("competitor_name"),
         "country_code": payload.get("country_code"),
         "competition_name": payload.get("competition_name"),
+        "competition_country_code": payload.get("competition_country_code"),
         "kind": payload.get("kind"),
     }
 

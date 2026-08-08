@@ -200,6 +200,7 @@ class SubscriptionSupervisor:
                     "wca_live_competition_id": target.wca_live_competition_id,
                     "wca_competition_id": target.wca_competition_id,
                     "competition_name": target.competition_name,
+                    "competition_country_code": target.competition_country_code,
                     "competition_start_date": target.competition_start_date,
                     "competition_end_date": target.competition_end_date,
                     "event_id": target.event_id,

@@ -1,0 +1,1650 @@
+{
+  "schema_version": 1,
+  "countries": {
+    "AF": {
+      "iso_alpha_2": "AF",
+      "iso_alpha_3": "AFG",
+      "wca_name": "Afghanistan",
+      "display_name": "Afghanistan",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "AL": {
+      "iso_alpha_2": "AL",
+      "iso_alpha_3": "ALB",
+      "wca_name": "Albania",
+      "display_name": "Albania",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "DZ": {
+      "iso_alpha_2": "DZ",
+      "iso_alpha_3": "DZA",
+      "wca_name": "Algeria",
+      "display_name": "Algeria",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "AD": {
+      "iso_alpha_2": "AD",
+      "iso_alpha_3": "AND",
+      "wca_name": "Andorra",
+      "display_name": "Andorra",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "AO": {
+      "iso_alpha_2": "AO",
+      "iso_alpha_3": "AGO",
+      "wca_name": "Angola",
+      "display_name": "Angola",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "AG": {
+      "iso_alpha_2": "AG",
+      "iso_alpha_3": "ATG",
+      "wca_name": "Antigua and Barbuda",
+      "display_name": "Antigua and Barbuda",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "AR": {
+      "iso_alpha_2": "AR",
+      "iso_alpha_3": "ARG",
+      "wca_name": "Argentina",
+      "display_name": "Argentina",
+      "wca_name_aliases": [],
+      "continent": "South America"
+    },
+    "AM": {
+      "iso_alpha_2": "AM",
+      "iso_alpha_3": "ARM",
+      "wca_name": "Armenia",
+      "display_name": "Armenia",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "AU": {
+      "iso_alpha_2": "AU",
+      "iso_alpha_3": "AUS",
+      "wca_name": "Australia",
+      "display_name": "Australia",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "AT": {
+      "iso_alpha_2": "AT",
+      "iso_alpha_3": "AUT",
+      "wca_name": "Austria",
+      "display_name": "Austria",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "AZ": {
+      "iso_alpha_2": "AZ",
+      "iso_alpha_3": "AZE",
+      "wca_name": "Azerbaijan",
+      "display_name": "Azerbaijan",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "BS": {
+      "iso_alpha_2": "BS",
+      "iso_alpha_3": "BHS",
+      "wca_name": "Bahamas",
+      "display_name": "Bahamas",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "BH": {
+      "iso_alpha_2": "BH",
+      "iso_alpha_3": "BHR",
+      "wca_name": "Bahrain",
+      "display_name": "Bahrain",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "BD": {
+      "iso_alpha_2": "BD",
+      "iso_alpha_3": "BGD",
+      "wca_name": "Bangladesh",
+      "display_name": "Bangladesh",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "BB": {
+      "iso_alpha_2": "BB",
+      "iso_alpha_3": "BRB",
+      "wca_name": "Barbados",
+      "display_name": "Barbados",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "BY": {
+      "iso_alpha_2": "BY",
+      "iso_alpha_3": "BLR",
+      "wca_name": "Belarus",
+      "display_name": "Belarus",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "BE": {
+      "iso_alpha_2": "BE",
+      "iso_alpha_3": "BEL",
+      "wca_name": "Belgium",
+      "display_name": "Belgium",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "BZ": {
+      "iso_alpha_2": "BZ",
+      "iso_alpha_3": "BLZ",
+      "wca_name": "Belize",
+      "display_name": "Belize",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "BJ": {
+      "iso_alpha_2": "BJ",
+      "iso_alpha_3": "BEN",
+      "wca_name": "Benin",
+      "display_name": "Benin",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "BT": {
+      "iso_alpha_2": "BT",
+      "iso_alpha_3": "BTN",
+      "wca_name": "Bhutan",
+      "display_name": "Bhutan",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "BO": {
+      "iso_alpha_2": "BO",
+      "iso_alpha_3": "BOL",
+      "wca_name": "Bolivia",
+      "display_name": "Bolivia",
+      "wca_name_aliases": [
+        "Bolivia, Plurinational State of"
+      ],
+      "continent": "South America"
+    },
+    "BA": {
+      "iso_alpha_2": "BA",
+      "iso_alpha_3": "BIH",
+      "wca_name": "Bosnia and Herzegovina",
+      "display_name": "Bosnia and Herzegovina",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "BW": {
+      "iso_alpha_2": "BW",
+      "iso_alpha_3": "BWA",
+      "wca_name": "Botswana",
+      "display_name": "Botswana",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "BR": {
+      "iso_alpha_2": "BR",
+      "iso_alpha_3": "BRA",
+      "wca_name": "Brazil",
+      "display_name": "Brazil",
+      "wca_name_aliases": [],
+      "continent": "South America"
+    },
+    "BN": {
+      "iso_alpha_2": "BN",
+      "iso_alpha_3": "BRN",
+      "wca_name": "Brunei",
+      "display_name": "Brunei",
+      "wca_name_aliases": [
+        "Brunei Darussalam"
+      ],
+      "continent": "Asia"
+    },
+    "BG": {
+      "iso_alpha_2": "BG",
+      "iso_alpha_3": "BGR",
+      "wca_name": "Bulgaria",
+      "display_name": "Bulgaria",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "BF": {
+      "iso_alpha_2": "BF",
+      "iso_alpha_3": "BFA",
+      "wca_name": "Burkina Faso",
+      "display_name": "Burkina Faso",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "BI": {
+      "iso_alpha_2": "BI",
+      "iso_alpha_3": "BDI",
+      "wca_name": "Burundi",
+      "display_name": "Burundi",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "CV": {
+      "iso_alpha_2": "CV",
+      "iso_alpha_3": "CPV",
+      "wca_name": "Cabo Verde",
+      "display_name": "Cabo Verde",
+      "wca_name_aliases": [
+        "Cape Verde"
+      ],
+      "continent": "Africa"
+    },
+    "KH": {
+      "iso_alpha_2": "KH",
+      "iso_alpha_3": "KHM",
+      "wca_name": "Cambodia",
+      "display_name": "Cambodia",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "CM": {
+      "iso_alpha_2": "CM",
+      "iso_alpha_3": "CMR",
+      "wca_name": "Cameroon",
+      "display_name": "Cameroon",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "CA": {
+      "iso_alpha_2": "CA",
+      "iso_alpha_3": "CAN",
+      "wca_name": "Canada",
+      "display_name": "Canada",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "CF": {
+      "iso_alpha_2": "CF",
+      "iso_alpha_3": "CAF",
+      "wca_name": "Central African Republic",
+      "display_name": "Central African Republic",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "TD": {
+      "iso_alpha_2": "TD",
+      "iso_alpha_3": "TCD",
+      "wca_name": "Chad",
+      "display_name": "Chad",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "CL": {
+      "iso_alpha_2": "CL",
+      "iso_alpha_3": "CHL",
+      "wca_name": "Chile",
+      "display_name": "Chile",
+      "wca_name_aliases": [],
+      "continent": "South America"
+    },
+    "CN": {
+      "iso_alpha_2": "CN",
+      "iso_alpha_3": "CHN",
+      "wca_name": "China",
+      "display_name": "China",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "CO": {
+      "iso_alpha_2": "CO",
+      "iso_alpha_3": "COL",
+      "wca_name": "Colombia",
+      "display_name": "Colombia",
+      "wca_name_aliases": [],
+      "continent": "South America"
+    },
+    "KM": {
+      "iso_alpha_2": "KM",
+      "iso_alpha_3": "COM",
+      "wca_name": "Comoros",
+      "display_name": "Comoros",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "CG": {
+      "iso_alpha_2": "CG",
+      "iso_alpha_3": "COG",
+      "wca_name": "Congo",
+      "display_name": "Congo",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "CR": {
+      "iso_alpha_2": "CR",
+      "iso_alpha_3": "CRI",
+      "wca_name": "Costa Rica",
+      "display_name": "Costa Rica",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "CI": {
+      "iso_alpha_2": "CI",
+      "iso_alpha_3": "CIV",
+      "wca_name": "Côte d'Ivoire",
+      "display_name": "Côte d'Ivoire",
+      "wca_name_aliases": [
+        "Ivory Coast",
+        "Cote d'Ivoire"
+      ],
+      "continent": "Africa"
+    },
+    "HR": {
+      "iso_alpha_2": "HR",
+      "iso_alpha_3": "HRV",
+      "wca_name": "Croatia",
+      "display_name": "Croatia",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "CU": {
+      "iso_alpha_2": "CU",
+      "iso_alpha_3": "CUB",
+      "wca_name": "Cuba",
+      "display_name": "Cuba",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "CY": {
+      "iso_alpha_2": "CY",
+      "iso_alpha_3": "CYP",
+      "wca_name": "Cyprus",
+      "display_name": "Cyprus",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "CZ": {
+      "iso_alpha_2": "CZ",
+      "iso_alpha_3": "CZE",
+      "wca_name": "Czech Republic",
+      "display_name": "Czech Republic",
+      "wca_name_aliases": [
+        "Czechia"
+      ],
+      "continent": "Europe"
+    },
+    "KP": {
+      "iso_alpha_2": "KP",
+      "iso_alpha_3": "PRK",
+      "wca_name": "Democratic People's Republic of Korea",
+      "display_name": "North Korea",
+      "wca_name_aliases": [
+        "North Korea",
+        "Korea, Democratic People's Republic of"
+      ],
+      "continent": "Asia"
+    },
+    "CD": {
+      "iso_alpha_2": "CD",
+      "iso_alpha_3": "COD",
+      "wca_name": "Democratic Republic of the Congo",
+      "display_name": "Democratic Republic of the Congo",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "DK": {
+      "iso_alpha_2": "DK",
+      "iso_alpha_3": "DNK",
+      "wca_name": "Denmark",
+      "display_name": "Denmark",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "DJ": {
+      "iso_alpha_2": "DJ",
+      "iso_alpha_3": "DJI",
+      "wca_name": "Djibouti",
+      "display_name": "Djibouti",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "DM": {
+      "iso_alpha_2": "DM",
+      "iso_alpha_3": "DMA",
+      "wca_name": "Dominica",
+      "display_name": "Dominica",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "DO": {
+      "iso_alpha_2": "DO",
+      "iso_alpha_3": "DOM",
+      "wca_name": "Dominican Republic",
+      "display_name": "Dominican Republic",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "EC": {
+      "iso_alpha_2": "EC",
+      "iso_alpha_3": "ECU",
+      "wca_name": "Ecuador",
+      "display_name": "Ecuador",
+      "wca_name_aliases": [],
+      "continent": "South America"
+    },
+    "EG": {
+      "iso_alpha_2": "EG",
+      "iso_alpha_3": "EGY",
+      "wca_name": "Egypt",
+      "display_name": "Egypt",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "SV": {
+      "iso_alpha_2": "SV",
+      "iso_alpha_3": "SLV",
+      "wca_name": "El Salvador",
+      "display_name": "El Salvador",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "GQ": {
+      "iso_alpha_2": "GQ",
+      "iso_alpha_3": "GNQ",
+      "wca_name": "Equatorial Guinea",
+      "display_name": "Equatorial Guinea",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "ER": {
+      "iso_alpha_2": "ER",
+      "iso_alpha_3": "ERI",
+      "wca_name": "Eritrea",
+      "display_name": "Eritrea",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "EE": {
+      "iso_alpha_2": "EE",
+      "iso_alpha_3": "EST",
+      "wca_name": "Estonia",
+      "display_name": "Estonia",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "SZ": {
+      "iso_alpha_2": "SZ",
+      "iso_alpha_3": "SWZ",
+      "wca_name": "Eswatini",
+      "display_name": "Eswatini",
+      "wca_name_aliases": [
+        "Swaziland"
+      ],
+      "continent": "Africa"
+    },
+    "ET": {
+      "iso_alpha_2": "ET",
+      "iso_alpha_3": "ETH",
+      "wca_name": "Ethiopia",
+      "display_name": "Ethiopia",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "FM": {
+      "iso_alpha_2": "FM",
+      "iso_alpha_3": "FSM",
+      "wca_name": "Federated States of Micronesia",
+      "display_name": "Micronesia",
+      "wca_name_aliases": [
+        "Micronesia"
+      ],
+      "continent": "Oceania"
+    },
+    "FJ": {
+      "iso_alpha_2": "FJ",
+      "iso_alpha_3": "FJI",
+      "wca_name": "Fiji",
+      "display_name": "Fiji",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "FI": {
+      "iso_alpha_2": "FI",
+      "iso_alpha_3": "FIN",
+      "wca_name": "Finland",
+      "display_name": "Finland",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "FR": {
+      "iso_alpha_2": "FR",
+      "iso_alpha_3": "FRA",
+      "wca_name": "France",
+      "display_name": "France",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "GA": {
+      "iso_alpha_2": "GA",
+      "iso_alpha_3": "GAB",
+      "wca_name": "Gabon",
+      "display_name": "Gabon",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "GM": {
+      "iso_alpha_2": "GM",
+      "iso_alpha_3": "GMB",
+      "wca_name": "Gambia",
+      "display_name": "Gambia",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "GE": {
+      "iso_alpha_2": "GE",
+      "iso_alpha_3": "GEO",
+      "wca_name": "Georgia",
+      "display_name": "Georgia",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "DE": {
+      "iso_alpha_2": "DE",
+      "iso_alpha_3": "DEU",
+      "wca_name": "Germany",
+      "display_name": "Germany",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "GH": {
+      "iso_alpha_2": "GH",
+      "iso_alpha_3": "GHA",
+      "wca_name": "Ghana",
+      "display_name": "Ghana",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "GR": {
+      "iso_alpha_2": "GR",
+      "iso_alpha_3": "GRC",
+      "wca_name": "Greece",
+      "display_name": "Greece",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "GD": {
+      "iso_alpha_2": "GD",
+      "iso_alpha_3": "GRD",
+      "wca_name": "Grenada",
+      "display_name": "Grenada",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "GT": {
+      "iso_alpha_2": "GT",
+      "iso_alpha_3": "GTM",
+      "wca_name": "Guatemala",
+      "display_name": "Guatemala",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "GN": {
+      "iso_alpha_2": "GN",
+      "iso_alpha_3": "GIN",
+      "wca_name": "Guinea",
+      "display_name": "Guinea",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "GW": {
+      "iso_alpha_2": "GW",
+      "iso_alpha_3": "GNB",
+      "wca_name": "Guinea Bissau",
+      "display_name": "Guinea Bissau",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "GY": {
+      "iso_alpha_2": "GY",
+      "iso_alpha_3": "GUY",
+      "wca_name": "Guyana",
+      "display_name": "Guyana",
+      "wca_name_aliases": [],
+      "continent": "South America"
+    },
+    "HT": {
+      "iso_alpha_2": "HT",
+      "iso_alpha_3": "HTI",
+      "wca_name": "Haiti",
+      "display_name": "Haiti",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "HN": {
+      "iso_alpha_2": "HN",
+      "iso_alpha_3": "HND",
+      "wca_name": "Honduras",
+      "display_name": "Honduras",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "HK": {
+      "iso_alpha_2": "HK",
+      "iso_alpha_3": "HKG",
+      "wca_name": "Hong Kong, China",
+      "display_name": "Hong Kong",
+      "wca_name_aliases": [
+        "Hong Kong"
+      ],
+      "continent": "Asia"
+    },
+    "HU": {
+      "iso_alpha_2": "HU",
+      "iso_alpha_3": "HUN",
+      "wca_name": "Hungary",
+      "display_name": "Hungary",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "IS": {
+      "iso_alpha_2": "IS",
+      "iso_alpha_3": "ISL",
+      "wca_name": "Iceland",
+      "display_name": "Iceland",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "IN": {
+      "iso_alpha_2": "IN",
+      "iso_alpha_3": "IND",
+      "wca_name": "India",
+      "display_name": "India",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "ID": {
+      "iso_alpha_2": "ID",
+      "iso_alpha_3": "IDN",
+      "wca_name": "Indonesia",
+      "display_name": "Indonesia",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "IR": {
+      "iso_alpha_2": "IR",
+      "iso_alpha_3": "IRN",
+      "wca_name": "Iran",
+      "display_name": "Iran",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "IQ": {
+      "iso_alpha_2": "IQ",
+      "iso_alpha_3": "IRQ",
+      "wca_name": "Iraq",
+      "display_name": "Iraq",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "IE": {
+      "iso_alpha_2": "IE",
+      "iso_alpha_3": "IRL",
+      "wca_name": "Ireland",
+      "display_name": "Ireland",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "IL": {
+      "iso_alpha_2": "IL",
+      "iso_alpha_3": "ISR",
+      "wca_name": "Israel",
+      "display_name": "Israel",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "IT": {
+      "iso_alpha_2": "IT",
+      "iso_alpha_3": "ITA",
+      "wca_name": "Italy",
+      "display_name": "Italy",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "JM": {
+      "iso_alpha_2": "JM",
+      "iso_alpha_3": "JAM",
+      "wca_name": "Jamaica",
+      "display_name": "Jamaica",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "JP": {
+      "iso_alpha_2": "JP",
+      "iso_alpha_3": "JPN",
+      "wca_name": "Japan",
+      "display_name": "Japan",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "JO": {
+      "iso_alpha_2": "JO",
+      "iso_alpha_3": "JOR",
+      "wca_name": "Jordan",
+      "display_name": "Jordan",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "KZ": {
+      "iso_alpha_2": "KZ",
+      "iso_alpha_3": "KAZ",
+      "wca_name": "Kazakhstan",
+      "display_name": "Kazakhstan",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "KE": {
+      "iso_alpha_2": "KE",
+      "iso_alpha_3": "KEN",
+      "wca_name": "Kenya",
+      "display_name": "Kenya",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "KI": {
+      "iso_alpha_2": "KI",
+      "iso_alpha_3": "KIR",
+      "wca_name": "Kiribati",
+      "display_name": "Kiribati",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "XK": {
+      "iso_alpha_2": "XK",
+      "iso_alpha_3": "XKX",
+      "wca_name": "Kosovo",
+      "display_name": "Kosovo",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "KW": {
+      "iso_alpha_2": "KW",
+      "iso_alpha_3": "KWT",
+      "wca_name": "Kuwait",
+      "display_name": "Kuwait",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "KG": {
+      "iso_alpha_2": "KG",
+      "iso_alpha_3": "KGZ",
+      "wca_name": "Kyrgyzstan",
+      "display_name": "Kyrgyzstan",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "LA": {
+      "iso_alpha_2": "LA",
+      "iso_alpha_3": "LAO",
+      "wca_name": "Laos",
+      "display_name": "Laos",
+      "wca_name_aliases": [
+        "Lao People's Democratic Republic",
+        "Lao PDR"
+      ],
+      "continent": "Asia"
+    },
+    "LV": {
+      "iso_alpha_2": "LV",
+      "iso_alpha_3": "LVA",
+      "wca_name": "Latvia",
+      "display_name": "Latvia",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "LB": {
+      "iso_alpha_2": "LB",
+      "iso_alpha_3": "LBN",
+      "wca_name": "Lebanon",
+      "display_name": "Lebanon",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "LS": {
+      "iso_alpha_2": "LS",
+      "iso_alpha_3": "LSO",
+      "wca_name": "Lesotho",
+      "display_name": "Lesotho",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "LR": {
+      "iso_alpha_2": "LR",
+      "iso_alpha_3": "LBR",
+      "wca_name": "Liberia",
+      "display_name": "Liberia",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "LY": {
+      "iso_alpha_2": "LY",
+      "iso_alpha_3": "LBY",
+      "wca_name": "Libya",
+      "display_name": "Libya",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "LI": {
+      "iso_alpha_2": "LI",
+      "iso_alpha_3": "LIE",
+      "wca_name": "Liechtenstein",
+      "display_name": "Liechtenstein",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "LT": {
+      "iso_alpha_2": "LT",
+      "iso_alpha_3": "LTU",
+      "wca_name": "Lithuania",
+      "display_name": "Lithuania",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "LU": {
+      "iso_alpha_2": "LU",
+      "iso_alpha_3": "LUX",
+      "wca_name": "Luxembourg",
+      "display_name": "Luxembourg",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "MO": {
+      "iso_alpha_2": "MO",
+      "iso_alpha_3": "MAC",
+      "wca_name": "Macau, China",
+      "display_name": "Macau",
+      "wca_name_aliases": [
+        "Macau",
+        "Macao"
+      ],
+      "continent": "Asia"
+    },
+    "MG": {
+      "iso_alpha_2": "MG",
+      "iso_alpha_3": "MDG",
+      "wca_name": "Madagascar",
+      "display_name": "Madagascar",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "MW": {
+      "iso_alpha_2": "MW",
+      "iso_alpha_3": "MWI",
+      "wca_name": "Malawi",
+      "display_name": "Malawi",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "MY": {
+      "iso_alpha_2": "MY",
+      "iso_alpha_3": "MYS",
+      "wca_name": "Malaysia",
+      "display_name": "Malaysia",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "MV": {
+      "iso_alpha_2": "MV",
+      "iso_alpha_3": "MDV",
+      "wca_name": "Maldives",
+      "display_name": "Maldives",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "ML": {
+      "iso_alpha_2": "ML",
+      "iso_alpha_3": "MLI",
+      "wca_name": "Mali",
+      "display_name": "Mali",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "MT": {
+      "iso_alpha_2": "MT",
+      "iso_alpha_3": "MLT",
+      "wca_name": "Malta",
+      "display_name": "Malta",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "MH": {
+      "iso_alpha_2": "MH",
+      "iso_alpha_3": "MHL",
+      "wca_name": "Marshall Islands",
+      "display_name": "Marshall Islands",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "MR": {
+      "iso_alpha_2": "MR",
+      "iso_alpha_3": "MRT",
+      "wca_name": "Mauritania",
+      "display_name": "Mauritania",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "MU": {
+      "iso_alpha_2": "MU",
+      "iso_alpha_3": "MUS",
+      "wca_name": "Mauritius",
+      "display_name": "Mauritius",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "MX": {
+      "iso_alpha_2": "MX",
+      "iso_alpha_3": "MEX",
+      "wca_name": "Mexico",
+      "display_name": "Mexico",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "MD": {
+      "iso_alpha_2": "MD",
+      "iso_alpha_3": "MDA",
+      "wca_name": "Moldova",
+      "display_name": "Moldova",
+      "wca_name_aliases": [
+        "Republic of Moldova",
+        "Moldova, Republic of"
+      ],
+      "continent": "Europe"
+    },
+    "MC": {
+      "iso_alpha_2": "MC",
+      "iso_alpha_3": "MCO",
+      "wca_name": "Monaco",
+      "display_name": "Monaco",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "MN": {
+      "iso_alpha_2": "MN",
+      "iso_alpha_3": "MNG",
+      "wca_name": "Mongolia",
+      "display_name": "Mongolia",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "ME": {
+      "iso_alpha_2": "ME",
+      "iso_alpha_3": "MNE",
+      "wca_name": "Montenegro",
+      "display_name": "Montenegro",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "MA": {
+      "iso_alpha_2": "MA",
+      "iso_alpha_3": "MAR",
+      "wca_name": "Morocco",
+      "display_name": "Morocco",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "MZ": {
+      "iso_alpha_2": "MZ",
+      "iso_alpha_3": "MOZ",
+      "wca_name": "Mozambique",
+      "display_name": "Mozambique",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "MM": {
+      "iso_alpha_2": "MM",
+      "iso_alpha_3": "MMR",
+      "wca_name": "Myanmar",
+      "display_name": "Myanmar",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "NA": {
+      "iso_alpha_2": "NA",
+      "iso_alpha_3": "NAM",
+      "wca_name": "Namibia",
+      "display_name": "Namibia",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "NR": {
+      "iso_alpha_2": "NR",
+      "iso_alpha_3": "NRU",
+      "wca_name": "Nauru",
+      "display_name": "Nauru",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "NP": {
+      "iso_alpha_2": "NP",
+      "iso_alpha_3": "NPL",
+      "wca_name": "Nepal",
+      "display_name": "Nepal",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "NL": {
+      "iso_alpha_2": "NL",
+      "iso_alpha_3": "NLD",
+      "wca_name": "Netherlands",
+      "display_name": "Netherlands",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "NZ": {
+      "iso_alpha_2": "NZ",
+      "iso_alpha_3": "NZL",
+      "wca_name": "New Zealand",
+      "display_name": "New Zealand",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "NI": {
+      "iso_alpha_2": "NI",
+      "iso_alpha_3": "NIC",
+      "wca_name": "Nicaragua",
+      "display_name": "Nicaragua",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "NE": {
+      "iso_alpha_2": "NE",
+      "iso_alpha_3": "NER",
+      "wca_name": "Niger",
+      "display_name": "Niger",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "NG": {
+      "iso_alpha_2": "NG",
+      "iso_alpha_3": "NGA",
+      "wca_name": "Nigeria",
+      "display_name": "Nigeria",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "MK": {
+      "iso_alpha_2": "MK",
+      "iso_alpha_3": "MKD",
+      "wca_name": "North Macedonia",
+      "display_name": "North Macedonia",
+      "wca_name_aliases": [
+        "Macedonia",
+        "FYR Macedonia"
+      ],
+      "continent": "Europe"
+    },
+    "NO": {
+      "iso_alpha_2": "NO",
+      "iso_alpha_3": "NOR",
+      "wca_name": "Norway",
+      "display_name": "Norway",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "OM": {
+      "iso_alpha_2": "OM",
+      "iso_alpha_3": "OMN",
+      "wca_name": "Oman",
+      "display_name": "Oman",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "PK": {
+      "iso_alpha_2": "PK",
+      "iso_alpha_3": "PAK",
+      "wca_name": "Pakistan",
+      "display_name": "Pakistan",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "PW": {
+      "iso_alpha_2": "PW",
+      "iso_alpha_3": "PLW",
+      "wca_name": "Palau",
+      "display_name": "Palau",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "PS": {
+      "iso_alpha_2": "PS",
+      "iso_alpha_3": "PSE",
+      "wca_name": "Palestine",
+      "display_name": "Palestine",
+      "wca_name_aliases": [
+        "State of Palestine",
+        "Palestinian Territory"
+      ],
+      "continent": "Asia"
+    },
+    "PA": {
+      "iso_alpha_2": "PA",
+      "iso_alpha_3": "PAN",
+      "wca_name": "Panama",
+      "display_name": "Panama",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "PG": {
+      "iso_alpha_2": "PG",
+      "iso_alpha_3": "PNG",
+      "wca_name": "Papua New Guinea",
+      "display_name": "Papua New Guinea",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "PY": {
+      "iso_alpha_2": "PY",
+      "iso_alpha_3": "PRY",
+      "wca_name": "Paraguay",
+      "display_name": "Paraguay",
+      "wca_name_aliases": [],
+      "continent": "South America"
+    },
+    "PE": {
+      "iso_alpha_2": "PE",
+      "iso_alpha_3": "PER",
+      "wca_name": "Peru",
+      "display_name": "Peru",
+      "wca_name_aliases": [],
+      "continent": "South America"
+    },
+    "PH": {
+      "iso_alpha_2": "PH",
+      "iso_alpha_3": "PHL",
+      "wca_name": "Philippines",
+      "display_name": "Philippines",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "PL": {
+      "iso_alpha_2": "PL",
+      "iso_alpha_3": "POL",
+      "wca_name": "Poland",
+      "display_name": "Poland",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "PT": {
+      "iso_alpha_2": "PT",
+      "iso_alpha_3": "PRT",
+      "wca_name": "Portugal",
+      "display_name": "Portugal",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "QA": {
+      "iso_alpha_2": "QA",
+      "iso_alpha_3": "QAT",
+      "wca_name": "Qatar",
+      "display_name": "Qatar",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "KR": {
+      "iso_alpha_2": "KR",
+      "iso_alpha_3": "KOR",
+      "wca_name": "Republic of Korea",
+      "display_name": "South Korea",
+      "wca_name_aliases": [
+        "South Korea",
+        "Korea, Republic of"
+      ],
+      "continent": "Asia"
+    },
+    "RO": {
+      "iso_alpha_2": "RO",
+      "iso_alpha_3": "ROU",
+      "wca_name": "Romania",
+      "display_name": "Romania",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "RU": {
+      "iso_alpha_2": "RU",
+      "iso_alpha_3": "RUS",
+      "wca_name": "Russia",
+      "display_name": "Russia",
+      "wca_name_aliases": [
+        "Russian Federation"
+      ],
+      "continent": "Europe"
+    },
+    "RW": {
+      "iso_alpha_2": "RW",
+      "iso_alpha_3": "RWA",
+      "wca_name": "Rwanda",
+      "display_name": "Rwanda",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "KN": {
+      "iso_alpha_2": "KN",
+      "iso_alpha_3": "KNA",
+      "wca_name": "Saint Kitts and Nevis",
+      "display_name": "Saint Kitts and Nevis",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "LC": {
+      "iso_alpha_2": "LC",
+      "iso_alpha_3": "LCA",
+      "wca_name": "Saint Lucia",
+      "display_name": "Saint Lucia",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "VC": {
+      "iso_alpha_2": "VC",
+      "iso_alpha_3": "VCT",
+      "wca_name": "Saint Vincent and the Grenadines",
+      "display_name": "Saint Vincent and the Grenadines",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "WS": {
+      "iso_alpha_2": "WS",
+      "iso_alpha_3": "WSM",
+      "wca_name": "Samoa",
+      "display_name": "Samoa",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "SM": {
+      "iso_alpha_2": "SM",
+      "iso_alpha_3": "SMR",
+      "wca_name": "San Marino",
+      "display_name": "San Marino",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "ST": {
+      "iso_alpha_2": "ST",
+      "iso_alpha_3": "STP",
+      "wca_name": "São Tomé and Príncipe",
+      "display_name": "São Tomé and Príncipe",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "SA": {
+      "iso_alpha_2": "SA",
+      "iso_alpha_3": "SAU",
+      "wca_name": "Saudi Arabia",
+      "display_name": "Saudi Arabia",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "SN": {
+      "iso_alpha_2": "SN",
+      "iso_alpha_3": "SEN",
+      "wca_name": "Senegal",
+      "display_name": "Senegal",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "RS": {
+      "iso_alpha_2": "RS",
+      "iso_alpha_3": "SRB",
+      "wca_name": "Serbia",
+      "display_name": "Serbia",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "SC": {
+      "iso_alpha_2": "SC",
+      "iso_alpha_3": "SYC",
+      "wca_name": "Seychelles",
+      "display_name": "Seychelles",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "SL": {
+      "iso_alpha_2": "SL",
+      "iso_alpha_3": "SLE",
+      "wca_name": "Sierra Leone",
+      "display_name": "Sierra Leone",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "SG": {
+      "iso_alpha_2": "SG",
+      "iso_alpha_3": "SGP",
+      "wca_name": "Singapore",
+      "display_name": "Singapore",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "SK": {
+      "iso_alpha_2": "SK",
+      "iso_alpha_3": "SVK",
+      "wca_name": "Slovakia",
+      "display_name": "Slovakia",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "SI": {
+      "iso_alpha_2": "SI",
+      "iso_alpha_3": "SVN",
+      "wca_name": "Slovenia",
+      "display_name": "Slovenia",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "SB": {
+      "iso_alpha_2": "SB",
+      "iso_alpha_3": "SLB",
+      "wca_name": "Solomon Islands",
+      "display_name": "Solomon Islands",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "SO": {
+      "iso_alpha_2": "SO",
+      "iso_alpha_3": "SOM",
+      "wca_name": "Somalia",
+      "display_name": "Somalia",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "ZA": {
+      "iso_alpha_2": "ZA",
+      "iso_alpha_3": "ZAF",
+      "wca_name": "South Africa",
+      "display_name": "South Africa",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "SS": {
+      "iso_alpha_2": "SS",
+      "iso_alpha_3": "SSD",
+      "wca_name": "South Sudan",
+      "display_name": "South Sudan",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "ES": {
+      "iso_alpha_2": "ES",
+      "iso_alpha_3": "ESP",
+      "wca_name": "Spain",
+      "display_name": "Spain",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "LK": {
+      "iso_alpha_2": "LK",
+      "iso_alpha_3": "LKA",
+      "wca_name": "Sri Lanka",
+      "display_name": "Sri Lanka",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "SD": {
+      "iso_alpha_2": "SD",
+      "iso_alpha_3": "SDN",
+      "wca_name": "Sudan",
+      "display_name": "Sudan",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "SR": {
+      "iso_alpha_2": "SR",
+      "iso_alpha_3": "SUR",
+      "wca_name": "Suriname",
+      "display_name": "Suriname",
+      "wca_name_aliases": [],
+      "continent": "South America"
+    },
+    "SE": {
+      "iso_alpha_2": "SE",
+      "iso_alpha_3": "SWE",
+      "wca_name": "Sweden",
+      "display_name": "Sweden",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "CH": {
+      "iso_alpha_2": "CH",
+      "iso_alpha_3": "CHE",
+      "wca_name": "Switzerland",
+      "display_name": "Switzerland",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "SY": {
+      "iso_alpha_2": "SY",
+      "iso_alpha_3": "SYR",
+      "wca_name": "Syria",
+      "display_name": "Syria",
+      "wca_name_aliases": [
+        "Syrian Arab Republic"
+      ],
+      "continent": "Asia"
+    },
+    "TW": {
+      "iso_alpha_2": "TW",
+      "iso_alpha_3": "TWN",
+      "wca_name": "Chinese Taipei",
+      "display_name": "Taiwan",
+      "wca_name_aliases": [
+        "Taiwan"
+      ],
+      "continent": "Asia"
+    },
+    "TJ": {
+      "iso_alpha_2": "TJ",
+      "iso_alpha_3": "TJK",
+      "wca_name": "Tajikistan",
+      "display_name": "Tajikistan",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "TZ": {
+      "iso_alpha_2": "TZ",
+      "iso_alpha_3": "TZA",
+      "wca_name": "Tanzania",
+      "display_name": "Tanzania",
+      "wca_name_aliases": [
+        "United Republic of Tanzania",
+        "Tanzania, United Republic of"
+      ],
+      "continent": "Africa"
+    },
+    "TH": {
+      "iso_alpha_2": "TH",
+      "iso_alpha_3": "THA",
+      "wca_name": "Thailand",
+      "display_name": "Thailand",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "TL": {
+      "iso_alpha_2": "TL",
+      "iso_alpha_3": "TLS",
+      "wca_name": "Timor-Leste",
+      "display_name": "Timor-Leste",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "TG": {
+      "iso_alpha_2": "TG",
+      "iso_alpha_3": "TGO",
+      "wca_name": "Togo",
+      "display_name": "Togo",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "TO": {
+      "iso_alpha_2": "TO",
+      "iso_alpha_3": "TON",
+      "wca_name": "Tonga",
+      "display_name": "Tonga",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "TT": {
+      "iso_alpha_2": "TT",
+      "iso_alpha_3": "TTO",
+      "wca_name": "Trinidad and Tobago",
+      "display_name": "Trinidad and Tobago",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "TN": {
+      "iso_alpha_2": "TN",
+      "iso_alpha_3": "TUN",
+      "wca_name": "Tunisia",
+      "display_name": "Tunisia",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "TR": {
+      "iso_alpha_2": "TR",
+      "iso_alpha_3": "TUR",
+      "wca_name": "Turkey",
+      "display_name": "Turkey",
+      "wca_name_aliases": [
+        "Türkiye"
+      ],
+      "continent": "Asia"
+    },
+    "TM": {
+      "iso_alpha_2": "TM",
+      "iso_alpha_3": "TKM",
+      "wca_name": "Turkmenistan",
+      "display_name": "Turkmenistan",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "TV": {
+      "iso_alpha_2": "TV",
+      "iso_alpha_3": "TUV",
+      "wca_name": "Tuvalu",
+      "display_name": "Tuvalu",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "UG": {
+      "iso_alpha_2": "UG",
+      "iso_alpha_3": "UGA",
+      "wca_name": "Uganda",
+      "display_name": "Uganda",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "UA": {
+      "iso_alpha_2": "UA",
+      "iso_alpha_3": "UKR",
+      "wca_name": "Ukraine",
+      "display_name": "Ukraine",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "AE": {
+      "iso_alpha_2": "AE",
+      "iso_alpha_3": "ARE",
+      "wca_name": "United Arab Emirates",
+      "display_name": "United Arab Emirates",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "GB": {
+      "iso_alpha_2": "GB",
+      "iso_alpha_3": "GBR",
+      "wca_name": "United Kingdom",
+      "display_name": "United Kingdom",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "US": {
+      "iso_alpha_2": "US",
+      "iso_alpha_3": "USA",
+      "wca_name": "United States",
+      "display_name": "United States",
+      "wca_name_aliases": [],
+      "continent": "North America"
+    },
+    "UY": {
+      "iso_alpha_2": "UY",
+      "iso_alpha_3": "URY",
+      "wca_name": "Uruguay",
+      "display_name": "Uruguay",
+      "wca_name_aliases": [],
+      "continent": "South America"
+    },
+    "UZ": {
+      "iso_alpha_2": "UZ",
+      "iso_alpha_3": "UZB",
+      "wca_name": "Uzbekistan",
+      "display_name": "Uzbekistan",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "VU": {
+      "iso_alpha_2": "VU",
+      "iso_alpha_3": "VUT",
+      "wca_name": "Vanuatu",
+      "display_name": "Vanuatu",
+      "wca_name_aliases": [],
+      "continent": "Oceania"
+    },
+    "VA": {
+      "iso_alpha_2": "VA",
+      "iso_alpha_3": "VAT",
+      "wca_name": "Vatican City",
+      "display_name": "Vatican City",
+      "wca_name_aliases": [],
+      "continent": "Europe"
+    },
+    "VE": {
+      "iso_alpha_2": "VE",
+      "iso_alpha_3": "VEN",
+      "wca_name": "Venezuela",
+      "display_name": "Venezuela",
+      "wca_name_aliases": [
+        "Venezuela, Bolivarian Republic of"
+      ],
+      "continent": "South America"
+    },
+    "VN": {
+      "iso_alpha_2": "VN",
+      "iso_alpha_3": "VNM",
+      "wca_name": "Vietnam",
+      "display_name": "Vietnam",
+      "wca_name_aliases": [
+        "Viet Nam"
+      ],
+      "continent": "Asia"
+    },
+    "YE": {
+      "iso_alpha_2": "YE",
+      "iso_alpha_3": "YEM",
+      "wca_name": "Yemen",
+      "display_name": "Yemen",
+      "wca_name_aliases": [],
+      "continent": "Asia"
+    },
+    "ZM": {
+      "iso_alpha_2": "ZM",
+      "iso_alpha_3": "ZMB",
+      "wca_name": "Zambia",
+      "display_name": "Zambia",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    },
+    "ZW": {
+      "iso_alpha_2": "ZW",
+      "iso_alpha_3": "ZWE",
+      "wca_name": "Zimbabwe",
+      "display_name": "Zimbabwe",
+      "wca_name_aliases": [],
+      "continent": "Africa"
+    }
+  }
+}

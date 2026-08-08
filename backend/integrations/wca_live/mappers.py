@@ -38,6 +38,9 @@ def map_record(payload: dict, observed_at: datetime) -> RecordCandidate:
             wca_live_competition_id=wca_live_competition_id,
             wca_competition_id=competition["wcaId"],
             competition_name=competition["name"],
+            competition_country_code=(
+                (competition.get("venues") or [{}])[0].get("country", {}).get("iso2", "")
+            ),
             competition_start_date=_date(competition["startDate"]),
             competition_end_date=_date(competition["endDate"]),
             round_id=round_id,

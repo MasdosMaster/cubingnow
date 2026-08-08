@@ -1,4 +1,7 @@
 import hashlib
+import json
+from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from .models import NotificationEvent, NotificationType
@@ -8,10 +11,14 @@ LEVEL_TO_NOTIFICATION_TYPE = {
     "CR": NotificationType.RECORD_CR,
     "NR": NotificationType.RECORD_NR,
 }
-LEVEL_LABELS = {
-    "WR": "World Record",
-    "CR": "Continental Record",
-    "NR": "NR",
+REFERENCE_DATA = Path(__file__).resolve().parents[2] / "reference_data"
+CONTINENT_ICON_KEYS = {
+    "Africa": "AfR",
+    "Asia": "AsR",
+    "Europe": "ER",
+    "North America": "NAR",
+    "South America": "SAR",
+    "Oceania": "OcR",
 }
 
 
@@ -24,9 +31,40 @@ def validate_relative_target_url(value: str) -> str:
     return value
 
 
-def _event_display_name(name: str, event_id: str) -> str:
-    display = (name or event_id).replace("x", "×")
-    return display.removesuffix(" Cube")
+@lru_cache(maxsize=1)
+def _reference_data() -> tuple[dict, dict]:
+    with (REFERENCE_DATA / "events.json").open(encoding="utf-8") as file:
+        events = json.load(file)["events"]
+    with (REFERENCE_DATA / "countries.json").open(encoding="utf-8") as file:
+        countries = json.load(file)["countries"]
+    return events, countries
+
+
+def _country(code: str) -> dict:
+    return _reference_data()[1].get((code or "").upper(), {})
+
+
+def _competition_country_code(record) -> str:
+    explicit = getattr(record, "competition_country_code", "")
+    if explicit:
+        return explicit
+    try:
+        competition = record.source_payload["result"]["round"]["competitionEvent"][
+            "competition"
+        ]
+        venues = competition.get("venues") or []
+        return venues[0].get("country", {}).get("iso2", "") if venues else ""
+    except (KeyError, TypeError):
+        return ""
+
+
+def _notification_icon(record_level: str, country_code: str) -> str:
+    icon_key = record_level
+    if record_level == "CR":
+        icon_key = CONTINENT_ICON_KEYS.get(_country(country_code).get("continent"))
+        if not icon_key:
+            return "/icons/icon-192.png"
+    return f"/notification_icons/notification_icon_{icon_key}.png"
 
 
 def build_record_payload(
@@ -37,26 +75,27 @@ def build_record_payload(
     test: bool = False,
 ) -> dict:
     target_url = validate_relative_target_url(target_url)
-    level_label = LEVEL_LABELS[record.record_level]
-    event_name = _event_display_name(record.event_name, record.event_id)
-    country_suffix = (
-        f" ({record.country_code})"
-        if record.record_level == "NR" and record.country_code
-        else ""
+    events, _countries = _reference_data()
+    event_name = events.get(record.event_id, {}).get("short_name") or record.event_name
+    competitor_country = _country(record.country_code)
+    competitor_country_name = competitor_country.get("display_name") or record.country_code
+    competition_country_code = _competition_country_code(record)
+    competition_country_name = (
+        _country(competition_country_code).get("display_name") or competition_country_code
     )
     prefix = "[TEST] " if test else ""
     return {
         "schema_version": 1,
         "notification_event_id": str(event.id),
         "notification_type": event.notification_type,
-        "title": f"{prefix}New {event_name} {level_label}{country_suffix}",
+        "title": f"{prefix}{event_name} {record.kind}: {record.formatted_result}",
         "body": (
-            f"{record.competitor_name} — {record.formatted_result} "
-            f"{record.kind} at {record.competition_name}"
+            f"By {record.competitor_name} from {competitor_country_name} "
+            f"at {record.competition_name} in {competition_country_name}"
         ),
         "target_url": target_url,
         "tag": "record:" + hashlib.sha256(event.deduplication_key.encode("utf-8")).hexdigest()[:32],
-        "icon": "/icons/icon-192.png",
+        "icon": _notification_icon(record.record_level, record.country_code),
         "badge": "/icons/badge-96.png",
         "record_level": record.record_level,
         "event_id": record.event_id,
@@ -65,5 +104,6 @@ def build_record_payload(
         "competitor_name": record.competitor_name,
         "country_code": record.country_code,
         "competition_name": record.competition_name,
+        "competition_country_code": competition_country_code,
         "detected_at": event.occurred_at.isoformat().replace("+00:00", "Z"),
     }

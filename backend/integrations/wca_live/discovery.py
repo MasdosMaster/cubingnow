@@ -38,6 +38,11 @@ def flatten_competition_rounds(competition: dict) -> list[RoundTarget]:
                     wca_live_competition_id=str(competition["id"]),
                     wca_competition_id=competition["wcaId"],
                     competition_name=competition["name"],
+                    competition_country_code=(
+                        (competition.get("venues") or [{}])[0]
+                        .get("country", {})
+                        .get("iso2", "")
+                    ),
                     competition_start_date=date.fromisoformat(competition["startDate"]),
                     competition_end_date=date.fromisoformat(competition["endDate"]),
                     event_id=event["id"],
