@@ -149,7 +149,16 @@ def test_normalization_is_order_independent_and_validates_pending_round():
 
 @pytest.mark.parametrize("tag", ["AfR", "AsR", "ER", "NAR", "OcR", "SAR"])
 def test_continental_record_tags_are_normalized_to_cr(tag):
-    assert normalize_record_tag(tag) == "CR"
+    for variant in (tag, tag.lower(), tag.upper(), tag.swapcase()):
+        assert normalize_record_tag(variant) == "CR"
+
+
+@pytest.mark.parametrize(
+    ("tag", "expected"),
+    [("wr", "WR"), ("Cr", "CR"), ("nR", "NR"), ("  AsR  ", "CR"), (None, "")],
+)
+def test_record_tag_normalization_preserves_generic_levels(tag, expected):
+    assert normalize_record_tag(tag) == expected
 
 
 def create_target():
@@ -478,7 +487,7 @@ def test_rolling_window_is_dynamic_not_hardcoded():
     )
 
 
-def test_completion_grace_keeps_competition_collectable_for_180_minutes():
+def test_completion_grace_keeps_competition_collectable_for_720_minutes():
     competition = source_competition()
     entry = CubingChinaDiscoveryEntry(
         slug=competition.source_id,
@@ -490,9 +499,9 @@ def test_completion_grace_keeps_competition_collectable_for_180_minutes():
     supervisor = CubingChinaLiveSupervisor(
         "https://example.test",
         "wss://example.test/ws",
-        completion_grace_minutes=180,
+        completion_grace_minutes=720,
     )
-    grace_ends = datetime(2026, 8, 10, 3, 0, tzinfo=UTC)
+    grace_ends = datetime(2026, 8, 10, 12, 0, tzinfo=UTC)
 
     assert supervisor._entry_is_collectable(entry, grace_ends) is True
     assert supervisor._entry_is_collectable(entry, grace_ends + timedelta(seconds=1)) is False

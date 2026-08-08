@@ -31,7 +31,7 @@ class CubingChinaLiveSupervisor:
         discovery_interval: int = 900,
         lookback_days: int = 1,
         lookahead_days: int = 7,
-        completion_grace_minutes: int = 180,
+        completion_grace_minutes: int = 720,
         max_connections: int = 10,
         retry_base_seconds: float = 1,
         retry_max_seconds: float = 60,

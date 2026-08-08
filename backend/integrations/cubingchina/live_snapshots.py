@@ -14,7 +14,7 @@ CONTINENTAL_RECORD_TAGS = {"AFR", "ASR", "ER", "NAR", "OCR", "SAR"}
 
 
 def normalize_record_tag(value) -> str:
-    tag = str(value or "").upper()
+    tag = str(value or "").strip().upper()
     return "CR" if tag in CONTINENTAL_RECORD_TAGS else tag
 
 

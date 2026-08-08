@@ -161,7 +161,7 @@ services:
       - key: CUBINGCHINA_LOOKAHEAD_DAYS
         value: "7"
       - key: CUBINGCHINA_COMPLETION_GRACE_MINUTES
-        value: "180"
+        value: "720"
       - key: CUBINGCHINA_MAX_CONNECTIONS
         value: "10"
       - key: CUBINGCHINA_RETRY_BASE_SECONDS
