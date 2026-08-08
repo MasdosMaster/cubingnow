@@ -133,7 +133,7 @@ def test_notification_uses_reference_labels_and_template():
     )
 
     assert created is True
-    assert event.payload["title"] == "3x3 single: 3.91"
+    assert event.payload["title"] == "3x3 NR single: 3.91"
     assert event.payload["body"] == (
         "By Test Cuber from Netherlands at Test Open 2026 in Spain"
     )
@@ -148,6 +148,7 @@ def test_continental_record_notification_uses_competitor_continent_icon():
     )
 
     assert event.payload["icon"] == "/notification_icons/notification_icon_ER.png"
+    assert event.payload["title"] == "3x3 ER single: 3.91"
 
 
 @pytest.mark.django_db

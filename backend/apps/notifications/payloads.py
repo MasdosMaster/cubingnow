@@ -59,12 +59,16 @@ def _competition_country_code(record) -> str:
 
 
 def _notification_icon(record_level: str, country_code: str) -> str:
-    icon_key = record_level
-    if record_level == "CR":
-        icon_key = CONTINENT_ICON_KEYS.get(_country(country_code).get("continent"))
-        if not icon_key:
-            return "/icons/icon-192.png"
-    return f"/notification_icons/notification_icon_{icon_key}.png"
+    level_label = _level_label(record_level, country_code)
+    if level_label == "CR":
+        return "/icons/icon-192.png"
+    return f"/notification_icons/notification_icon_{level_label}.png"
+
+
+def _level_label(record_level: str, country_code: str) -> str:
+    if record_level != "CR":
+        return record_level
+    return CONTINENT_ICON_KEYS.get(_country(country_code).get("continent"), "CR")
 
 
 def build_record_payload(
@@ -79,6 +83,7 @@ def build_record_payload(
     event_name = events.get(record.event_id, {}).get("short_name") or record.event_name
     competitor_country = _country(record.country_code)
     competitor_country_name = competitor_country.get("display_name") or record.country_code
+    level_label = _level_label(record.record_level, record.country_code)
     competition_country_code = _competition_country_code(record)
     competition_country_name = (
         _country(competition_country_code).get("display_name") or competition_country_code
@@ -88,7 +93,9 @@ def build_record_payload(
         "schema_version": 1,
         "notification_event_id": str(event.id),
         "notification_type": event.notification_type,
-        "title": f"{prefix}{event_name} {record.kind}: {record.formatted_result}",
+        "title": (
+            f"{prefix}{event_name} {level_label} {record.kind}: {record.formatted_result}"
+        ),
         "body": (
             f"By {record.competitor_name} from {competitor_country_name} "
             f"at {record.competition_name} in {competition_country_name}"
