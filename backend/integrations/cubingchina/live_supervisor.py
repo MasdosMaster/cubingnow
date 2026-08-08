@@ -31,7 +31,7 @@ class CubingChinaLiveSupervisor:
         discovery_interval: int = 900,
         lookback_days: int = 1,
         lookahead_days: int = 7,
-        completion_grace_hours: int = 12,
+        completion_grace_minutes: int = 180,
         max_connections: int = 10,
         retry_base_seconds: float = 1,
         retry_max_seconds: float = 60,
@@ -45,7 +45,7 @@ class CubingChinaLiveSupervisor:
         self.discovery_interval = max(discovery_interval, 10)
         self.lookback_days = max(lookback_days, 0)
         self.lookahead_days = max(lookahead_days, 0)
-        self.completion_grace_hours = max(completion_grace_hours, 0)
+        self.completion_grace_minutes = max(completion_grace_minutes, 0)
         self.max_connections = max(max_connections, 1)
         self.retry_base_seconds = max(retry_base_seconds, 0)
         self.retry_max_seconds = max(retry_max_seconds, self.retry_base_seconds)
@@ -372,7 +372,7 @@ class CubingChinaLiveSupervisor:
         for existing in CubingChinaCompetitionTarget.objects.filter(active=True):
             retirement_at = datetime.combine(
                 existing.competition_end_date + timedelta(days=1), time.min, tzinfo=UTC
-            ) + timedelta(hours=self.completion_grace_hours)
+            ) + timedelta(minutes=self.completion_grace_minutes)
             if existing.slug not in seen_slugs or now > retirement_at:
                 existing.active = False
                 existing.connected = False
@@ -404,7 +404,7 @@ class CubingChinaLiveSupervisor:
                 **counts,
                 "lookback_days": self.lookback_days,
                 "lookahead_days": self.lookahead_days,
-                "completion_grace_hours": self.completion_grace_hours,
+                "completion_grace_minutes": self.completion_grace_minutes,
                 "discovery_interval_seconds": self.discovery_interval,
                 "max_connections": self.max_connections,
             },
@@ -414,13 +414,13 @@ class CubingChinaLiveSupervisor:
     def _entry_is_collectable(self, entry, now) -> bool:
         ends = datetime.combine(
             entry.competition_end_date + timedelta(days=1), time.min, tzinfo=UTC
-        ) + timedelta(hours=self.completion_grace_hours)
+        ) + timedelta(minutes=self.completion_grace_minutes)
         return now <= ends
 
     def _target_dates_are_collectable(self, target, now) -> bool:
         ends = datetime.combine(
             target.competition_end_date + timedelta(days=1), time.min, tzinfo=UTC
-        ) + timedelta(hours=self.completion_grace_hours)
+        ) + timedelta(minutes=self.completion_grace_minutes)
         return now <= ends
 
     @staticmethod

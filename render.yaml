@@ -160,8 +160,8 @@ services:
         value: "1"
       - key: CUBINGCHINA_LOOKAHEAD_DAYS
         value: "7"
-      - key: CUBINGCHINA_COMPLETION_GRACE_HOURS
-        value: "12"
+      - key: CUBINGCHINA_COMPLETION_GRACE_MINUTES
+        value: "180"
       - key: CUBINGCHINA_MAX_CONNECTIONS
         value: "10"
       - key: CUBINGCHINA_RETRY_BASE_SECONDS

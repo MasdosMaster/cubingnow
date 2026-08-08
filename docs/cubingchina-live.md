@@ -14,7 +14,7 @@ official WCA IDs from competition detail pages, and parses the live page's `data
 
 Collectors begin as soon as a relevant official competition exposes usable live metadata, even
 if its start date is still inside the lookahead window. They remain eligible through the end date
-plus a 12-hour grace period, after which their targets are retired without deleting observations.
+plus a 180-minute grace period, after which their targets are retired without deleting observations.
 This avoids local-time ambiguity at the start of a competition. Transient source failures never
 clear previously persisted state.
 
@@ -36,11 +36,14 @@ round-management, or chat action is implemented.
 
 ## Detection semantics
 
-CubingChina exposes record tags as `sr` (single) and `ar` (average). Only `WR`, `CR`, and `NR`
-produce observations. CubingChina does not expose an entry timestamp, so `detected_at` is the
+CubingChina exposes record tags as `sr` (single) and `ar` (average). Continental tags (`AfR`,
+`AsR`, `ER`, `NAR`, `OcR`, and `SAR`) are normalized to `CR`; `WR`, `CR`, and `NR` produce
+observations. CubingChina does not expose an entry timestamp, so `detected_at` is the
 first moment this pipeline observed the record, not the solve time. The first-ever round snapshot
 evaluates all current tags; persisted state prevents restart or reconnect floods. Corrections
-retain the original detection time, and removed tags are marked withdrawn.
+retain the original detection time, and removed tags are marked withdrawn. Recent-record API
+responses show active observations by default; corrected history remains available with
+`?status=withdrawn`.
 
 ## Configuration
 
@@ -51,7 +54,7 @@ retain the original detection time, and removed tags are marked withdrawn.
 | `CUBINGCHINA_DISCOVERY_INTERVAL_SECONDS` | `900` | Rediscovery interval |
 | `CUBINGCHINA_LOOKBACK_DAYS` | `1` | Rolling discovery lookback |
 | `CUBINGCHINA_LOOKAHEAD_DAYS` | `7` | Rolling discovery lookahead |
-| `CUBINGCHINA_COMPLETION_GRACE_HOURS` | `12` | Post-competition collection grace |
+| `CUBINGCHINA_COMPLETION_GRACE_MINUTES` | `180` | Post-competition collection grace |
 | `CUBINGCHINA_MAX_CONNECTIONS` | `10` | Concurrent competition sockets |
 | `CUBINGCHINA_RETRY_BASE_SECONDS` | `1` | Reconnect backoff base |
 | `CUBINGCHINA_RETRY_MAX_SECONDS` | `60` | Reconnect backoff ceiling |

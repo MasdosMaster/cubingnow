@@ -10,6 +10,14 @@ class CubingChinaPayloadError(ValueError):
     """Raised when a CubingChina live-results payload cannot be normalized safely."""
 
 
+CONTINENTAL_RECORD_TAGS = {"AFR", "ASR", "ER", "NAR", "OCR", "SAR"}
+
+
+def normalize_record_tag(value) -> str:
+    tag = str(value or "").upper()
+    return "CR" if tag in CONTINENTAL_RECORD_TAGS else tag
+
+
 def _country_code(region: str) -> str:
     if not region:
         return ""
@@ -54,8 +62,8 @@ def normalize_result(
             "attempts": list(attempts),
             "best": int(payload["b"]) if payload.get("b") is not None else None,
             "average": int(payload["a"]) if payload.get("a") is not None else None,
-            "single_record_tag": str(payload.get("sr") or "").upper(),
-            "average_record_tag": str(payload.get("ar") or "").upper(),
+            "single_record_tag": normalize_record_tag(payload.get("sr")),
+            "average_record_tag": normalize_record_tag(payload.get("ar")),
         }
         canonical = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
         return NormalizedCubingChinaResult(

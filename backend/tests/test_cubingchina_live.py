@@ -33,6 +33,7 @@ from integrations.cubingchina.live_schemas import (
 from integrations.cubingchina.live_snapshots import (
     CubingChinaPayloadError,
     diff_snapshots,
+    normalize_record_tag,
     normalize_snapshot,
 )
 from integrations.cubingchina.live_supervisor import CubingChinaLiveSupervisor
@@ -146,6 +147,11 @@ def test_normalization_is_order_independent_and_validates_pending_round():
         normalize_snapshot(bad, users, 2468, "333", "1")
 
 
+@pytest.mark.parametrize("tag", ["AfR", "AsR", "ER", "NAR", "OcR", "SAR"])
+def test_continental_record_tags_are_normalized_to_cr(tag):
+    assert normalize_record_tag(tag) == "CR"
+
+
 def create_target():
     competition = CubingChinaCompetitionTarget.objects.create(
         slug="China-Open-2026",
@@ -229,10 +235,27 @@ def test_snapshot_ingestion_is_independent_idempotent_and_handles_corrections():
 @pytest.mark.django_db
 def test_unknown_record_tags_are_persisted_as_state_but_not_observations():
     target = create_target()
-    row = {**fixture_json("cubingchina_round_snapshot.json")[0], "sr": "ER", "ar": ""}
+    row = {**fixture_json("cubingchina_round_snapshot.json")[0], "sr": "PR", "ar": ""}
     process_round_snapshot(target.pk, [row], fixture_json("cubingchina_users.json"))
-    assert CubingChinaResultState.objects.get().single_record_tag == "ER"
+    assert CubingChinaResultState.objects.get().single_record_tag == "PR"
     assert RecentRecordObservation.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_asian_record_tag_creates_continental_observation():
+    target = create_target()
+    row = {
+        **fixture_json("cubingchina_round_snapshot.json")[0],
+        "sr": "AsR",
+        "ar": "",
+    }
+    result = process_round_snapshot(
+        target.pk, [row], fixture_json("cubingchina_users.json")
+    )
+    observation = RecentRecordObservation.objects.get()
+    assert result["records_detected"] == 1
+    assert observation.kind == RecentRecordObservation.Kind.SINGLE
+    assert observation.record_level == RecentRecordObservation.Level.CONTINENTAL
 
 
 @pytest.mark.django_db
@@ -453,6 +476,26 @@ def test_rolling_window_is_dynamic_not_hardcoded():
         date(2030, 1, 9),
         date(2030, 1, 17),
     )
+
+
+def test_completion_grace_keeps_competition_collectable_for_180_minutes():
+    competition = source_competition()
+    entry = CubingChinaDiscoveryEntry(
+        slug=competition.source_id,
+        wca_competition_id=competition.wca_id,
+        competition_name=competition.name,
+        competition_start_date=competition.start_date,
+        competition_end_date=competition.end_date,
+    )
+    supervisor = CubingChinaLiveSupervisor(
+        "https://example.test",
+        "wss://example.test/ws",
+        completion_grace_minutes=180,
+    )
+    grace_ends = datetime(2026, 8, 10, 3, 0, tzinfo=UTC)
+
+    assert supervisor._entry_is_collectable(entry, grace_ends) is True
+    assert supervisor._entry_is_collectable(entry, grace_ends + timedelta(seconds=1)) is False
 
 
 def test_competition_socket_concurrency_is_bounded():

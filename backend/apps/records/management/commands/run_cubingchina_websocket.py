@@ -29,9 +29,9 @@ class Command(BaseCommand):
             "--lookahead-days", type=int, default=settings.CUBINGCHINA_LOOKAHEAD_DAYS
         )
         parser.add_argument(
-            "--completion-grace-hours",
+            "--completion-grace-minutes",
             type=int,
-            default=settings.CUBINGCHINA_COMPLETION_GRACE_HOURS,
+            default=settings.CUBINGCHINA_COMPLETION_GRACE_MINUTES,
         )
         parser.add_argument(
             "--max-connections", type=int, default=settings.CUBINGCHINA_MAX_CONNECTIONS
@@ -73,7 +73,7 @@ class Command(BaseCommand):
             discovery_interval=options["discovery_interval"],
             lookback_days=options["lookback_days"],
             lookahead_days=options["lookahead_days"],
-            completion_grace_hours=options["completion_grace_hours"],
+            completion_grace_minutes=options["completion_grace_minutes"],
             max_connections=options["max_connections"],
             retry_base_seconds=options["retry_base_seconds"],
             retry_max_seconds=options["retry_max_seconds"],

@@ -56,7 +56,9 @@ class RecentRecordObservationViewSet(ReadOnlyModelViewSet):
         )
         source = self.request.query_params.get("source")
         level = self.request.query_params.get("level")
-        status = self.request.query_params.get("status")
+        status = self.request.query_params.get(
+            "status", RecentRecordObservation.Status.ACTIVE
+        )
         query = self.request.query_params.get("q")
         if source:
             queryset = queryset.filter(ingestion_method=source)

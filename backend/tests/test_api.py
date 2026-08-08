@@ -105,6 +105,31 @@ def test_recent_record_endpoints_return_independent_lists_and_match_metadata():
 
 
 @pytest.mark.django_db
+def test_recent_record_endpoint_hides_withdrawn_observations_by_default():
+    observed_at = timezone.now()
+    observation, _created = persist_record_candidate(
+        record_candidate(observed_at),
+        RecentRecordObservation.IngestionMethod.API_POLLING,
+        {"api": True},
+    )
+    observation.status = RecentRecordObservation.Status.WITHDRAWN
+    observation.withdrawn_at = observed_at + timedelta(seconds=5)
+    observation.save(update_fields=["status", "withdrawn_at"])
+
+    client = APIClient()
+    active_response = client.get("/api/recent-records/?source=api_polling")
+    withdrawn_response = client.get(
+        "/api/recent-records/?source=api_polling&status=withdrawn"
+    )
+
+    assert active_response.status_code == withdrawn_response.status_code == 200
+    assert active_response.json()["results"] == []
+    assert [row["id"] for row in withdrawn_response.json()["results"]] == [
+        observation.pk
+    ]
+
+
+@pytest.mark.django_db
 def test_ingestion_status_is_available_before_workers_start():
     response = APIClient().get("/api/ingestion-status/")
     assert response.status_code == 200
