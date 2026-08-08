@@ -96,7 +96,7 @@ input[type="search"] { width: min(280px, 40vw); height: 32px; padding: 0 12px; b
 .detected-age small { white-space: normal; line-height: 1.25; }
 .level { display: block; width: 38px; padding: 6px 0; border-radius: 12px; color: white; text-align: center; font-size: 11px; font-weight: 850; box-shadow: 0 10px 15px -3px rgb(0 0 0 / .1); }
 .level-wr { background: #fb7185; }
-.level-cr { background: #38bdf8; }
+.level-cr { color: #000; background: #facc15; }
 .level-nr { background: #22c55e; }
 .match { color: #a16207; font-size: 11px; font-weight: 750; }
 .match.yes { color: #15803d; }
