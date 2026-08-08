@@ -10,10 +10,16 @@ from apps.records.models import (
     CanonicalResult,
     PersonalBestBaseline,
     RecordBenchmark,
+    RecordValidation,
     ResultObservation,
+    WCARecordSnapshot,
 )
 from apps.records.reconciliation import reconcile_result_observation
 from apps.records.snapshot_differ import diff_result_values
+from integrations.wca.record_validation import (
+    parse_wca_records,
+    refresh_wca_record_validations,
+)
 
 
 def observed(
@@ -369,3 +375,115 @@ def test_identical_attempt_values_keep_distinct_attempt_identities():
     assert api_row.canonical_result_id == first_row.canonical_result_id
     assert second_row.canonical_result_id != first_row.canonical_result_id
     assert CanonicalResult.objects.count() == 2
+
+
+def wca_records_payload(*, world=400, europe=410, netherlands=420):
+    return {
+        "world_records": {"333": {"single": world}},
+        "continental_records": {"_Europe": {"333": {"single": europe}}},
+        "national_records": {"Netherlands": {"333": {"single": netherlands}}},
+    }
+
+
+def test_wca_records_parser_normalizes_all_three_official_scopes():
+    parsed = parse_wca_records(wca_records_payload())
+    assert parsed.records == {
+        "WR|333|single|": 400,
+        "CR|333|single|_Europe": 410,
+        "NR|333|single|Netherlands": 420,
+    }
+
+
+@pytest.mark.django_db
+def test_cubingchina_result_is_independently_validated_and_published(
+    django_capture_on_commit_callbacks,
+):
+    with django_capture_on_commit_callbacks(execute=True):
+        refresh_wca_record_validations(
+            wca_records_payload(),
+            source_url="https://www.worldcubeassociation.org/api/v0/records",
+        )
+        row = reconcile_result_observation(observed(value=390, claim=""))
+
+    result = row.canonical_result
+    result.refresh_from_db()
+    assert result.validation_status == "verified"
+    assert result.validation_reason == "wca_records_api_record_match"
+    assert set(
+        result.record_validations.filter(status="verified").values_list("level", flat=True)
+    ) == {"WR", "CR", "NR"}
+    achievement = Achievement.objects.get(result=result, type="WR")
+    assert achievement.classification_reason == "wca_records_api_validation"
+    assert achievement.qualification.show_on_homepage is True
+    assert achievement.qualification.notification_eligible is True
+
+
+@pytest.mark.django_db
+def test_wca_snapshot_equality_still_validates_after_official_record_updates():
+    refresh_wca_record_validations(
+        wca_records_payload(world=390),
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    result = reconcile_result_observation(observed(value=390)).canonical_result
+
+    validation = RecordValidation.objects.get(result=result, level="WR")
+    achievement = Achievement.objects.get(result=result, type="WR")
+    assert validation.status == "verified"
+    assert validation.result_value == validation.benchmark_value == 390
+    assert achievement.qualification.show_on_homepage is True
+
+
+@pytest.mark.django_db
+def test_cubingchina_bogus_claim_is_rejected_by_official_record_snapshot():
+    refresh_wca_record_validations(
+        {
+            "world_records": {"333": {"single": 400}},
+            "continental_records": {},
+            "national_records": {},
+        },
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    result = reconcile_result_observation(observed(value=412, claim="WR")).canonical_result
+    result.refresh_from_db()
+
+    assert result.validation_status == "rejected"
+    assert result.validation_reason == "wca_records_api_record_mismatch"
+    assert RecordValidation.objects.get(result=result, level="WR").status == "rejected"
+    assert not Achievement.objects.filter(result=result, type="WR", status="active").exists()
+    assert NotificationEvent.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_official_level_rejection_overrides_stale_higher_live_baselines():
+    for level, region in (("WR", ""), ("CR", "Europe"), ("NR", "NL")):
+        RecordBenchmark.objects.create(
+            level=level,
+            event_id="333",
+            kind="single",
+            region_code=region,
+            value=500,
+        )
+    refresh_wca_record_validations(
+        wca_records_payload(world=400, europe=410, netherlands=420),
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    result = reconcile_result_observation(observed(value=412)).canonical_result
+
+    assert set(
+        Achievement.objects.filter(result=result, status="active").values_list(
+            "type", flat=True
+        )
+    ) == {"NR"}
+    assert Achievement.objects.get(result=result, type="NR").qualification.show_on_homepage
+
+
+@pytest.mark.django_db
+def test_wca_snapshots_are_content_deduplicated_but_rechecked():
+    payload = wca_records_payload()
+    refresh_wca_record_validations(
+        payload, source_url="https://www.worldcubeassociation.org/api/v0/records"
+    )
+    refresh_wca_record_validations(
+        payload, source_url="https://www.worldcubeassociation.org/api/v0/records"
+    )
+    assert WCARecordSnapshot.objects.count() == 1

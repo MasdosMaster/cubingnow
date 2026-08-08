@@ -312,6 +312,59 @@ class RecordBenchmark(models.Model):
         ]
 
 
+class WCARecordSnapshot(models.Model):
+    """A normalized, auditable response from the official WCA records endpoint."""
+
+    source_url = models.URLField(max_length=512)
+    payload_hash = models.CharField(max_length=64, unique=True)
+    records = models.JSONField(default=dict)
+    record_count = models.PositiveIntegerField(default=0)
+    first_fetched_at = models.DateTimeField()
+    last_fetched_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-last_fetched_at", "-id"]
+
+
+class RecordValidation(models.Model):
+    """Independent evidence that a result meets one official record benchmark."""
+
+    class Validator(models.TextChoices):
+        WCA_RECORDS_API = "wca_records_api", "WCA records API"
+
+    class Status(models.TextChoices):
+        VERIFIED = "verified", "Verified"
+        REJECTED = "rejected", "Rejected"
+
+    result = models.ForeignKey(
+        CanonicalResult, on_delete=models.CASCADE, related_name="record_validations"
+    )
+    snapshot = models.ForeignKey(
+        WCARecordSnapshot, on_delete=models.PROTECT, related_name="validations"
+    )
+    validator = models.CharField(max_length=32, choices=Validator.choices)
+    level = models.CharField(max_length=2, choices=RecordBenchmark.Level.choices)
+    region_code = models.CharField(max_length=64, blank=True)
+    result_value = models.IntegerField()
+    benchmark_value = models.IntegerField()
+    status = models.CharField(max_length=16, choices=Status.choices)
+    reason = models.CharField(max_length=128)
+    checked_at = models.DateTimeField()
+    details = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["result_id", "level"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["result", "validator", "level"],
+                name="unique_record_validation_per_validator_level",
+            )
+        ]
+
+
 class PersonalBestBaseline(models.Model):
     competitor_wca_id = models.CharField(max_length=16)
     event_id = models.CharField(max_length=16)

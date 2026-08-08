@@ -2,6 +2,7 @@ import logging
 
 from django.db import IntegrityError, transaction
 
+from integrations.wca.record_validation import validate_result_against_latest_snapshot
 from integrations.wca_live.result_values import format_result
 
 from .classification import reclassify_scope
@@ -264,6 +265,7 @@ def reconcile_result_observation(
     observation.save()
 
     _refresh_canonical(result)
+    validate_result_against_latest_snapshot(result)
     reclassify_scope(result.event_id, result.kind)
     logger.info(
         "result_observation_reconciled source=%s method=%s observation_id=%s canonical_result_id=%s revision=%s",
@@ -292,5 +294,6 @@ def retract_result_observation(observation_key: str, observed_at) -> bool:
     observation.save(update_fields=["status", "last_observed_at", "revision", "updated_at"])
     result = observation.canonical_result
     _refresh_canonical(result)
+    validate_result_against_latest_snapshot(result)
     reclassify_scope(result.event_id, result.kind)
     return True

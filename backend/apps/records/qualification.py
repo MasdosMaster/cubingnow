@@ -1,6 +1,6 @@
 from django.utils import timezone
 
-from .models import Achievement, QualificationDecision
+from .models import Achievement, QualificationDecision, RecordValidation
 
 DISPLAY_PRECEDENCE = {
     Achievement.Type.WORLD: 0,
@@ -17,11 +17,29 @@ NOTIFIABLE_TYPES = {
 
 def evaluate_result_qualifications(result) -> list[Achievement]:
     active = list(result.achievements.filter(status=Achievement.Status.ACTIVE).order_by("type"))
-    visible = min(active, key=lambda item: DISPLAY_PRECEDENCE[item.type], default=None)
+    trusted_result = (
+        result.validation_status == result.ValidationStatus.VERIFIED
+        and result.validation_reason == "trusted_source_observation"
+    )
+    independently_validated = set(
+        result.record_validations.filter(
+            validator=RecordValidation.Validator.WCA_RECORDS_API,
+            result_value=result.value,
+            status=RecordValidation.Status.VERIFIED,
+        ).values_list("level", flat=True)
+    )
+    verified_active = [
+        achievement
+        for achievement in active
+        if trusted_result or achievement.type in independently_validated
+    ]
+    visible = min(
+        verified_active, key=lambda item: DISPLAY_PRECEDENCE[item.type], default=None
+    )
     eligible: list[Achievement] = []
     now = timezone.now()
     for achievement in result.achievements.all():
-        verified = result.validation_status == result.ValidationStatus.VERIFIED
+        verified = trusted_result or achievement.type in independently_validated
         is_active = achievement.status == Achievement.Status.ACTIVE
         show = is_active and verified and achievement.pk == getattr(visible, "pk", None)
         notify = (

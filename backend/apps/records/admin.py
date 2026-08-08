@@ -13,12 +13,14 @@ from .models import (
     RecentRecordObservation,
     Record,
     RecordBenchmark,
+    RecordValidation,
     Result,
     ResultIdentityScope,
     ResultObservation,
     SourceObservation,
     SubscriptionResultState,
     SubscriptionRound,
+    WCARecordSnapshot,
 )
 
 admin.site.register(Result)
@@ -88,5 +90,7 @@ class AchievementAdmin(admin.ModelAdmin):
 
 admin.site.register(QualificationDecision)
 admin.site.register(RecordBenchmark)
+admin.site.register(RecordValidation)
+admin.site.register(WCARecordSnapshot)
 admin.site.register(PersonalBestBaseline)
 admin.site.register(ResultIdentityScope)

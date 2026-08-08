@@ -45,6 +45,15 @@ retain the original detection time, and removed tags are marked withdrawn. Recen
 responses show active observations by default; corrected history remains available with
 `?status=withdrawn`.
 
+CubingChina record tags are retained only as Source Claims. Before a CubingChina achievement can
+appear on the homepage or enter the notification queue, CubingNow compares the encoded result with
+the matching world, WCA-continent, or WCA-country value from `/api/v0/records`. Both a better value
+and equality validate the level, because the official endpoint may already contain the newly
+ratified result. The full normalized WCA snapshot and a per-result/per-level Record Validation are
+stored for audit. This validation confirms record qualification; it does not authenticate the
+underlying solve. Effective live benchmark replay still prevents a later, slower result from being
+classified against an obsolete pre-competition baseline.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -59,12 +68,14 @@ responses show active observations by default; corrected history remains availab
 | `CUBINGCHINA_RETRY_BASE_SECONDS` | `1` | Reconnect backoff base |
 | `CUBINGCHINA_RETRY_MAX_SECONDS` | `60` | Reconnect backoff ceiling |
 | `CUBINGCHINA_KEEPALIVE_SECONDS` | `55` | Idle interval before JSON ping |
+| `WCA_PUBLIC_BASE_URL` | `https://www.worldcubeassociation.org` | Official records API origin |
 
 Run locally with:
 
 ```bash
 cd backend
 uv run python manage.py run_cubingchina_websocket
+uv run python manage.py refresh_wca_record_validations
 ```
 
 Inspect observations and health with:

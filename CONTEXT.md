@@ -28,6 +28,14 @@ _Avoid_: Achievement, verified record
 CubingNow's decision about whether an Achievement appears publicly or is eligible for notification. It is distinct from the Achievement itself.
 _Avoid_: Classification, valid flag
 
+**Record Validation**:
+Independent, level-specific evidence that a Canonical Result meets the corresponding official WCA record benchmark. Record Validation confirms record qualification; it does not authenticate the underlying solve.
+_Avoid_: Result verification, trusted source label
+
+**WCA Record Snapshot**:
+An auditable normalized capture of the official WCA records endpoint used for Record Validation. It is separate from the historical baseline used to replay effective live record state.
+_Avoid_: Live benchmark, source claim
+
 **Entry Time**:
 The time a provider says a result was entered into the live competition system, when supplied.
 _Avoid_: Observation time, solve time

@@ -88,7 +88,10 @@ python backend/manage.py run_cubingchina_websocket
 
 It discovers official WCA competitions from CubingChina every 15 minutes, opens one read-only
 socket per currently active competition, fetches every round sequentially, and reconciles full
-snapshots after reconnecting. See [CubingChina live collection](docs/cubingchina-live.md).
+snapshots after reconnecting. Each discovery cycle also refreshes the official WCA records
+snapshot and revalidates CubingChina WR/CR/NR qualifications independently of CubingChina's labels.
+Run `python backend/manage.py refresh_wca_record_validations` for an on-demand refresh. See
+[CubingChina live collection](docs/cubingchina-live.md).
 
 Synchronize the public WCA and CubingChina accepted-registration lists for the current
 Wednesday-through-Tuesday attendance window with:

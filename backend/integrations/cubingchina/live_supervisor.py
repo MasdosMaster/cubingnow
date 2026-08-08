@@ -13,6 +13,11 @@ from apps.records.models import (
     IngestionWorkerStatus,
     RecentRecordObservation,
 )
+from integrations.wca.record_validation import (
+    RECORDS_PATH,
+    fetch_wca_records,
+    refresh_wca_record_validations,
+)
 
 from .live_client import CubingChinaWebSocketClient
 from .live_discovery import discover_live_competitions
@@ -28,6 +33,7 @@ class CubingChinaLiveSupervisor:
         self,
         base_url: str,
         websocket_endpoint: str,
+        wca_base_url: str | None = None,
         discovery_interval: int = 900,
         lookback_days: int = 1,
         lookahead_days: int = 7,
@@ -42,6 +48,7 @@ class CubingChinaLiveSupervisor:
     ):
         self.base_url = base_url
         self.websocket_endpoint = websocket_endpoint
+        self.wca_base_url = wca_base_url
         self.discovery_interval = max(discovery_interval, 10)
         self.lookback_days = max(lookback_days, 0)
         self.lookahead_days = max(lookahead_days, 0)
@@ -63,6 +70,13 @@ class CubingChinaLiveSupervisor:
     async def run_forever(self) -> None:
         try:
             while not self._stopping:
+                if self.wca_base_url:
+                    try:
+                        await self._refresh_wca_records()
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        logger.exception("wca_record_validation_refresh_failed")
                 try:
                     target_ids = await self._discover()
                     await self._reconcile_collectors(target_ids)
@@ -80,6 +94,20 @@ class CubingChinaLiveSupervisor:
                 await asyncio.gather(*self._collectors.values(), return_exceptions=True)
             self._collectors.clear()
             await self._db(self._mark_all_disconnected)
+
+    async def _refresh_wca_records(self) -> None:
+        payload = await asyncio.to_thread(fetch_wca_records, self.wca_base_url)
+        source_url = f"{self.wca_base_url.rstrip('/')}{RECORDS_PATH}"
+        snapshot = await self._db(
+            refresh_wca_record_validations,
+            payload,
+            source_url=source_url,
+        )
+        logger.info(
+            "wca_record_validation_refreshed snapshot_id=%s records=%s",
+            snapshot.pk,
+            snapshot.record_count,
+        )
 
     async def run_discovery_once(self) -> set[int]:
         """Run one discovery/reconciliation pass for tests and operations."""
@@ -269,8 +297,8 @@ class CubingChinaLiveSupervisor:
             await self._db(self._heartbeat)
 
     @staticmethod
-    async def _db(function, *args):
-        return await sync_to_async(function, thread_sensitive=True)(*args)
+    async def _db(function, *args, **kwargs):
+        return await sync_to_async(function, thread_sensitive=True)(*args, **kwargs)
 
     def _persist_discovery(self, entries, metadata) -> set[int]:
         now = timezone.now()

@@ -17,6 +17,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--base-url", default=settings.CUBINGCHINA_BASE_URL)
         parser.add_argument("--websocket-endpoint", default=settings.CUBINGCHINA_WS_URL)
+        parser.add_argument("--wca-base-url", default=settings.WCA_PUBLIC_BASE_URL)
         parser.add_argument(
             "--discovery-interval",
             type=int,
@@ -70,6 +71,7 @@ class Command(BaseCommand):
         supervisor = CubingChinaLiveSupervisor(
             base_url=options["base_url"],
             websocket_endpoint=options["websocket_endpoint"],
+            wca_base_url=options["wca_base_url"],
             discovery_interval=options["discovery_interval"],
             lookback_days=options["lookback_days"],
             lookahead_days=options["lookahead_days"],

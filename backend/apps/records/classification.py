@@ -12,6 +12,7 @@ from .models import (
     CanonicalResult,
     PersonalBestBaseline,
     RecordBenchmark,
+    RecordValidation,
     ResultIdentityScope,
     ResultObservation,
 )
@@ -51,6 +52,15 @@ def _trusted_claims(result: CanonicalResult) -> set[str]:
         and observation.source_claim_trusted
         and observation.value == result.value
         and observation.source_record_tag in RECORD_LEVELS
+    }
+
+
+def _record_validations(result: CanonicalResult) -> dict[str, RecordValidation]:
+    return {
+        validation.level: validation
+        for validation in result.record_validations.all()
+        if validation.validator == RecordValidation.Validator.WCA_RECORDS_API
+        and validation.result_value == result.value
     }
 
 
@@ -99,7 +109,7 @@ def reclassify_scope(event_id: str, kind: str) -> set[int]:
             kind=kind,
             status__in=[CanonicalResult.Status.ACTIVE, CanonicalResult.Status.CORRECTED],
         )
-        .prefetch_related("observations")
+        .prefetch_related("observations", "record_validations")
     )
     results.sort(key=lambda result: (_result_time(result), result.pk))
     now = timezone.now()
@@ -115,6 +125,7 @@ def reclassify_scope(event_id: str, kind: str) -> set[int]:
         if not is_complete(result.value):
             continue
         claims = _trusted_claims(result)
+        validations = _record_validations(result)
         if result.validation_status == CanonicalResult.ValidationStatus.REJECTED:
             continue
         for level in RECORD_LEVELS:
@@ -124,18 +135,40 @@ def reclassify_scope(event_id: str, kind: str) -> set[int]:
             key = (level, region)
             incumbent = effective.get(key)
             source_supported = level in claims
-            mathematically_qualified = incumbent is not None and is_better(
-                event_id, result.value, incumbent
+            validation = validations.get(level)
+            validation_verified = (
+                validation is not None
+                and validation.status == RecordValidation.Status.VERIFIED
             )
-            if not source_supported and not mathematically_qualified:
+            mathematically_qualified = (
+                (validation is None or validation_verified)
+                and incumbent is not None
+                and is_better(event_id, result.value, incumbent)
+            )
+            validation_supported = validation_verified and (
+                incumbent is None
+                or is_better(event_id, result.value, incumbent)
+                or result.value == incumbent
+            )
+            if not source_supported and not mathematically_qualified and not validation_supported:
                 continue
             desired_by_result[result.pk].add(level)
             _set_achievement(
                 result,
                 level,
-                reason=("trusted_source_claim" if source_supported else "effective_live_benchmark"),
+                reason=(
+                    "trusted_source_claim"
+                    if source_supported
+                    else (
+                        "wca_records_api_validation"
+                        if validation_supported
+                        else "effective_live_benchmark"
+                    )
+                ),
                 source_claim_supported=source_supported,
-                benchmark_value=incumbent,
+                benchmark_value=(
+                    validation.benchmark_value if validation_supported else incumbent
+                ),
             )
             if incumbent is None or is_better(event_id, result.value, incumbent):
                 effective[key] = result.value
