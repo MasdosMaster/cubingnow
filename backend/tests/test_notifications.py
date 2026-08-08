@@ -83,6 +83,7 @@ def record(*, level="WR", canonical_key="wca|TestOpen2026|2020TEST01|333|1|singl
         event_name="3x3x3 Cube",
         formatted_result="3.91",
         competitor_name="Test Cuber",
+        country_code="NL",
         competition_name="Test Open 2026",
         kind="single",
         detected_at=timezone.now(),
@@ -122,6 +123,17 @@ def event_and_delivery(item=None):
     item = item or endpoint()
     event, _ = publish_record_notification(record())
     return event, NotificationDelivery.objects.get(event=event, endpoint=item)
+
+
+@pytest.mark.django_db
+def test_national_record_notification_uses_nr_and_country_code():
+    event, created = publish_record_notification(
+        record(level="NR", canonical_key="wca|TestOpen2026|2020TEST01|333|1|single|NR")
+    )
+
+    assert created is True
+    assert event.payload["title"] == "New 3×3×3 NR (NL)"
+    assert event.payload["country_code"] == "NL"
 
 
 @pytest.mark.django_db

@@ -11,7 +11,7 @@ LEVEL_TO_NOTIFICATION_TYPE = {
 LEVEL_LABELS = {
     "WR": "World Record",
     "CR": "Continental Record",
-    "NR": "National Record",
+    "NR": "NR",
 }
 
 
@@ -39,12 +39,17 @@ def build_record_payload(
     target_url = validate_relative_target_url(target_url)
     level_label = LEVEL_LABELS[record.record_level]
     event_name = _event_display_name(record.event_name, record.event_id)
+    country_suffix = (
+        f" ({record.country_code})"
+        if record.record_level == "NR" and record.country_code
+        else ""
+    )
     prefix = "[TEST] " if test else ""
     return {
         "schema_version": 1,
         "notification_event_id": str(event.id),
         "notification_type": event.notification_type,
-        "title": f"{prefix}New {event_name} {level_label}",
+        "title": f"{prefix}New {event_name} {level_label}{country_suffix}",
         "body": (
             f"{record.competitor_name} — {record.formatted_result} "
             f"{record.kind} at {record.competition_name}"
@@ -58,6 +63,7 @@ def build_record_payload(
         "formatted_result": record.formatted_result,
         "kind": record.kind,
         "competitor_name": record.competitor_name,
+        "country_code": record.country_code,
         "competition_name": record.competition_name,
         "detected_at": event.occurred_at.isoformat().replace("+00:00", "Z"),
     }
