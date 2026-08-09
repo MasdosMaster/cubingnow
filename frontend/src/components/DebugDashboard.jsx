@@ -21,6 +21,17 @@ function age(value) {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
+function competitionDateRange(start, end) {
+  if (!start) return "—";
+  const format = (value) => new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(new Date(`${value}T00:00:00Z`));
+  return !end || end === start ? format(start) : `${format(start)} – ${format(end)}`;
+}
+
 function rate(history, source, counter) {
   if (history.length < 2) return 0;
   const previous = history.at(-2);
@@ -112,7 +123,7 @@ function WorkerCard({ title, description, worker, extra, showMessage = true, sho
         {"connected" in (worker || {}) && <><dt>Connection</dt><dd>{worker.connected ? "Connected" : "Disconnected"}</dd></>}
         <dt>Heartbeat</dt><dd title={worker?.heartbeat_at || ""}>{age(worker?.heartbeat_at)}</dd>
         {showMessage && <><dt>Last message</dt><dd title={worker?.last_message_at || ""}>{age(worker?.last_message_at)}</dd></>}
-        {showSnapshot && <><dt>Last snapshot</dt><dd title={worker?.last_successful_snapshot_at || ""}>{age(worker?.last_successful_snapshot_at)}</dd></>}
+        {showSnapshot && <><dt>Last round snapshot</dt><dd title={worker?.last_successful_snapshot_at || ""}>{age(worker?.last_successful_snapshot_at)}</dd></>}
         <dt>Observations</dt><dd>{number(worker?.observations_count)}</dd>
         {extra}
       </dl>
@@ -325,10 +336,11 @@ export function DebugDashboard() {
           <div className="debug-section-heading"><div><p className="debug-kicker">Per socket</p><h2>CubingChina competitions</h2></div><p>{number(competitions.length)} active targets</p></div>
           <div className="debug-table-wrap">
             <table className="debug-table">
-              <thead><tr><th>Competition</th><th>State</th><th>Queue</th><th>Frames</th><th>Rounds</th><th>Last message</th><th>Last snapshot</th><th>Error</th></tr></thead>
+              <thead><tr><th>Competition</th><th>Date</th><th>State</th><th>Queue</th><th>Frames</th><th>Rounds</th><th>Last message</th><th>Last round snapshot</th><th>Error</th></tr></thead>
               <tbody>
                 {competitions.map((competition) => <tr key={competition.slug}>
                   <td><strong>{competition.competition_name || competition.slug}</strong><small>{competition.wca_competition_id || competition.slug}</small></td>
+                  <td>{competitionDateRange(competition.competition_start_date, competition.competition_end_date)}</td>
                   <td><StatusPill state={competition.last_error ? "critical" : competition.connected ? "healthy" : "neutral"}>{competition.connected ? "connected" : competition.status}</StatusPill></td>
                   <td className="numeric-cell">{number(competition.websocket?.message_queue_size)}<small>peak {number(competition.websocket?.peak_message_queue_size)}</small></td>
                   <td className="numeric-cell">{number(competition.websocket?.counters?.frames_received)}</td>
@@ -337,7 +349,7 @@ export function DebugDashboard() {
                   <td title={competition.last_snapshot_at || ""}>{age(competition.last_snapshot_at)}</td>
                   <td className={competition.last_error ? "table-error" : ""}>{competition.last_error || "—"}</td>
                 </tr>)}
-                {!competitions.length && <tr><td className="debug-empty-row" colSpan="8">No active CubingChina competition targets.</td></tr>}
+                {!competitions.length && <tr><td className="debug-empty-row" colSpan="9">No active CubingChina competition targets.</td></tr>}
               </tbody>
             </table>
           </div>

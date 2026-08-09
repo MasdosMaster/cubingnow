@@ -178,4 +178,7 @@ def test_ingestion_status_aggregates_live_websocket_queues():
     assert payload["websocket_queues"]["cubingchina"]["message_queue_size"] == 7
     assert payload["websocket_queues"]["cubingchina"]["peak_message_queue_size"] == 7
     assert payload["websocket_queues"]["cubingchina"]["counters"]["frames_received"] == 70
-    assert payload["cubingchina_websocket"]["metadata"]["competitions"][0]["websocket"]
+    competition = payload["cubingchina_websocket"]["metadata"]["competitions"][0]
+    assert competition["competition_start_date"] == now.date().isoformat()
+    assert competition["competition_end_date"] == now.date().isoformat()
+    assert competition["websocket"]

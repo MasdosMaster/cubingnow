@@ -30,7 +30,15 @@ const payload = {
   },
   graphql_subscription: { status: "running", connected: true, observations_count: 12 },
   api_polling: { status: "running", observations_count: 8 },
-  cubingchina_websocket: { status: "running", connected: true, observations_count: 3, connected_competition_count: 2, target_competition_count: 2, target_round_count: 14, metadata: { competitions: [] } },
+  cubingchina_websocket: {
+    status: "running",
+    connected: true,
+    observations_count: 3,
+    connected_competition_count: 2,
+    target_competition_count: 2,
+    target_round_count: 14,
+    metadata: { competitions: [{ slug: "test-open", competition_name: "Test Open", competition_start_date: "2026-08-09", competition_end_date: "2026-08-10", status: "active", connected: true, websocket: { message_queue_size: 1, peak_message_queue_size: 2, counters: { frames_received: 6 } } }] }
+  },
   subscription_rounds: { discovered: 12, subscribed: 12, errors: 0 },
   classification: { pending_scope_count: 0, claimed_scope_count: 0, failed_scope_count: 0, oldest_observation_lag_seconds: 0 },
   notifications: { deliveries: {}, queued_count: 0, due_count: 0, active_endpoint_count: 5, events_last_24h: 2 },
@@ -59,10 +67,11 @@ describe("debug dashboard", () => {
     const graphqlCard = screen.getByRole("heading", { name: "WCA Live GraphQL" }).closest("article");
     const apiCard = screen.getByRole("heading", { name: "WCA Live API" }).closest("article");
     expect(graphqlCard.textContent).toContain("Last message");
-    expect(graphqlCard.textContent).toContain("Last snapshot");
+    expect(graphqlCard.textContent).toContain("Last round snapshot");
     expect(apiCard.textContent).toContain("Last poll");
     expect(apiCard.textContent).not.toContain("Last message");
-    expect(apiCard.textContent).not.toContain("Last snapshot");
+    expect(apiCard.textContent).not.toContain("Last round snapshot");
+    expect(screen.getByText("09 Aug 2026 – 10 Aug 2026")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Resume live updates" })).toBeTruthy());

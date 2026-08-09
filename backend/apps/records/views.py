@@ -303,6 +303,8 @@ def ingestion_status(request):
             "slug",
             "competition_name",
             "wca_competition_id",
+            "competition_start_date",
+            "competition_end_date",
             "status",
             "connected",
             "last_connected_at",
@@ -317,6 +319,8 @@ def ingestion_status(request):
     cubingchina_queue_size = 0
     cubingchina_peak_queue_size = 0
     for target in competition_health:
+        target["competition_start_date"] = _iso(target["competition_start_date"])
+        target["competition_end_date"] = _iso(target["competition_end_date"])
         target["last_connected_at"] = _iso(target["last_connected_at"])
         target["last_message_at"] = _iso(target["last_message_at"])
         target["last_snapshot_at"] = _iso(target["last_snapshot_at"])
