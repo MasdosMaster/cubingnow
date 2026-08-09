@@ -332,6 +332,7 @@
       "iso_alpha_3": "CIV",
       "wca_name": "Côte d'Ivoire",
       "display_name": "Côte d'Ivoire",
+      "wca_records_name": "Cote d_Ivoire",
       "wca_name_aliases": [
         "Ivory Coast",
         "Cote d'Ivoire"
@@ -632,6 +633,7 @@
       "iso_alpha_3": "HKG",
       "wca_name": "Hong Kong, China",
       "display_name": "Hong Kong",
+      "wca_records_name": "Hong Kong",
       "wca_name_aliases": [
         "Hong Kong"
       ],
@@ -861,6 +863,7 @@
       "iso_alpha_3": "MAC",
       "wca_name": "Macau, China",
       "display_name": "Macau",
+      "wca_records_name": "Macau",
       "wca_name_aliases": [
         "Macau",
         "Macao"
@@ -1193,6 +1196,7 @@
       "iso_alpha_3": "KOR",
       "wca_name": "Republic of Korea",
       "display_name": "South Korea",
+      "wca_records_name": "Korea",
       "wca_name_aliases": [
         "South Korea",
         "Korea, Republic of"
@@ -1432,6 +1436,7 @@
       "iso_alpha_3": "TWN",
       "wca_name": "Chinese Taipei",
       "display_name": "Taiwan",
+      "wca_records_name": "Taiwan",
       "wca_name_aliases": [
         "Taiwan"
       ],
@@ -1567,6 +1572,7 @@
       "iso_alpha_3": "USA",
       "wca_name": "United States",
       "display_name": "United States",
+      "wca_records_name": "USA",
       "wca_name_aliases": [],
       "continent": "North America"
     },

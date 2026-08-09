@@ -115,10 +115,13 @@ def _country_name(result: CanonicalResult) -> str:
     from apps.records.classification import _countries
 
     country = _countries().get((result.country_code or "").upper(), {})
-    # The records endpoint uses its public display labels for a few regions
-    # (notably "Hong Kong" and "Macau"), while other WCA surfaces use the
-    # longer "Hong Kong, China" / "Macau, China" names.
-    return country.get("display_name") or country.get("wca_name", "")
+    # Some records-API keys differ from both the WCA registration name and the
+    # public display name (for example "USA", "Korea", and "Cote d_Ivoire").
+    return (
+        country.get("wca_records_name")
+        or country.get("display_name")
+        or country.get("wca_name", "")
+    )
 
 
 def _validation_regions(result: CanonicalResult):

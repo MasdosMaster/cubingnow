@@ -448,7 +448,14 @@ def test_wca_snapshot_equality_still_validates_after_official_record_updates():
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     ("country_code", "records_region", "average"),
-    [("HK", "Hong Kong", 613), ("MO", "Macau", 778)],
+    [
+        ("HK", "Hong Kong", 613),
+        ("MO", "Macau", 778),
+        ("TW", "Taiwan", 701),
+        ("CI", "Cote d_Ivoire", 702),
+        ("KR", "Korea", 703),
+        ("US", "USA", 704),
+    ],
 )
 def test_records_api_display_name_validates_equal_national_record(
     country_code, records_region, average
