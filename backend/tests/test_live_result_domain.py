@@ -43,6 +43,8 @@ def observed(
     round_id="provider-round-1",
     value=390,
     attempt_number=1,
+    country_code="NL",
+    kind="single",
     claim="",
     entered_at=None,
     observed_at=None,
@@ -66,8 +68,8 @@ def observed(
         event_name="3x3x3 Cube",
         competitor_name=competitor_name,
         competitor_wca_id=competitor,
-        country_code="NL",
-        kind="single",
+        country_code=country_code,
+        kind=kind,
         value=value,
         attempt_number=attempt_number,
         source_record_tag=claim,
@@ -440,6 +442,42 @@ def test_wca_snapshot_equality_still_validates_after_official_record_updates():
     achievement = Achievement.objects.get(result=result, type="WR")
     assert validation.status == "verified"
     assert validation.result_value == validation.benchmark_value == 390
+    assert achievement.qualification.show_on_homepage is True
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("country_code", "records_region", "average"),
+    [("HK", "Hong Kong", 613), ("MO", "Macau", 778)],
+)
+def test_records_api_display_name_validates_equal_national_record(
+    country_code, records_region, average
+):
+    refresh_wca_record_validations(
+        {
+            "world_records": {},
+            "continental_records": {},
+            "national_records": {
+                records_region: {"333": {"average": average}}
+            },
+        },
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    result = reconcile_result_observation(
+        observed(
+            value=average,
+            attempt_number=None,
+            country_code=country_code,
+            kind="average",
+            claim="NR",
+        )
+    ).canonical_result
+
+    validation = RecordValidation.objects.get(result=result, level="NR")
+    achievement = Achievement.objects.get(result=result, type="NR")
+    assert validation.region_code == records_region
+    assert validation.status == "verified"
+    assert validation.result_value == validation.benchmark_value == average
     assert achievement.qualification.show_on_homepage is True
 
 
