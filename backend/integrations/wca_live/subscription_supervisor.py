@@ -126,6 +126,8 @@ class SubscriptionSupervisor:
                             logger.exception(
                                 "subscription_snapshot_processing_failed round_id=%s", round_id
                             )
+                        else:
+                            await self._db(self._record_snapshot_processed)
                 if discovery_task in done:
                     targets = await self._discover()
                     await self._retire_missing_subscriptions(client, targets)
@@ -310,7 +312,15 @@ class SubscriptionSupervisor:
             heartbeat_at=now, last_message_at=now
         )
         SubscriptionRound.objects.filter(round_id=round_id).update(last_message_at=now)
-        logger.info("subscription_snapshot_received round_id=%s", round_id)
+        logger.info("subscription_message_received round_id=%s", round_id)
+
+    @staticmethod
+    def _record_snapshot_processed():
+        now = timezone.now()
+        IngestionWorkerStatus.objects.filter(ingestion_method=METHOD).update(
+            heartbeat_at=now,
+            last_successful_snapshot_at=now,
+        )
 
     @staticmethod
     def _mark_round_subscribed(round_id: str, subscription_id: str):

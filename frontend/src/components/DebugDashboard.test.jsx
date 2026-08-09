@@ -56,6 +56,13 @@ describe("debug dashboard", () => {
     expect(screen.getByText("2 competition sockets")).toBeTruthy();
     expect(screen.getByText("Operational")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Notifications" })).toBeTruthy();
+    const graphqlCard = screen.getByRole("heading", { name: "WCA Live GraphQL" }).closest("article");
+    const apiCard = screen.getByRole("heading", { name: "WCA Live API" }).closest("article");
+    expect(graphqlCard.textContent).toContain("Last message");
+    expect(graphqlCard.textContent).toContain("Last snapshot");
+    expect(apiCard.textContent).toContain("Last poll");
+    expect(apiCard.textContent).not.toContain("Last message");
+    expect(apiCard.textContent).not.toContain("Last snapshot");
 
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Resume live updates" })).toBeTruthy());

@@ -58,6 +58,23 @@ def test_discovery_refresh_preserves_websocket_diagnostics():
 
 
 @pytest.mark.django_db
+def test_message_and_successful_snapshot_timestamps_are_recorded_separately():
+    status = IngestionWorkerStatus.objects.create(ingestion_method=METHOD)
+
+    SubscriptionSupervisor._record_message_received("round-not-persisted")
+
+    status.refresh_from_db()
+    assert status.last_message_at is not None
+    assert status.last_successful_snapshot_at is None
+
+    SubscriptionSupervisor._record_snapshot_processed()
+
+    status.refresh_from_db()
+    assert status.last_successful_snapshot_at is not None
+    assert status.last_successful_snapshot_at >= status.last_message_at
+
+
+@pytest.mark.django_db
 def test_discovery_targets_are_bulk_upserted_and_retired_rows_are_reactivated(
     django_assert_max_num_queries,
 ):

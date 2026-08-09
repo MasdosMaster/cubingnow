@@ -99,7 +99,7 @@ function QueueCard({ title, subtitle, queue, history, source, incomingCounter, o
   );
 }
 
-function WorkerCard({ title, description, worker, extra }) {
+function WorkerCard({ title, description, worker, extra, showMessage = true, showSnapshot = true }) {
   const running = worker?.status === "running";
   const state = worker?.last_error ? "critical" : running ? "healthy" : "neutral";
   return (
@@ -111,8 +111,8 @@ function WorkerCard({ title, description, worker, extra }) {
       <dl className="debug-definition-list">
         {"connected" in (worker || {}) && <><dt>Connection</dt><dd>{worker.connected ? "Connected" : "Disconnected"}</dd></>}
         <dt>Heartbeat</dt><dd title={worker?.heartbeat_at || ""}>{age(worker?.heartbeat_at)}</dd>
-        <dt>Last message</dt><dd title={worker?.last_message_at || ""}>{age(worker?.last_message_at)}</dd>
-        <dt>Last snapshot</dt><dd title={worker?.last_successful_snapshot_at || ""}>{age(worker?.last_successful_snapshot_at)}</dd>
+        {showMessage && <><dt>Last message</dt><dd title={worker?.last_message_at || ""}>{age(worker?.last_message_at)}</dd></>}
+        {showSnapshot && <><dt>Last snapshot</dt><dd title={worker?.last_successful_snapshot_at || ""}>{age(worker?.last_successful_snapshot_at)}</dd></>}
         <dt>Observations</dt><dd>{number(worker?.observations_count)}</dd>
         {extra}
       </dl>
@@ -278,7 +278,7 @@ export function DebugDashboard() {
           <div className="debug-section-heading"><div><p className="debug-kicker">Workers</p><h2>Ingestion pipelines</h2></div></div>
           <div className="worker-grid">
             <WorkerCard title="WCA Live GraphQL" description="Full-round snapshot subscriptions" worker={status?.graphql_subscription} extra={<><dt>Subscribed rounds</dt><dd>{number(status?.subscription_rounds?.subscribed)} / {number(status?.subscription_rounds?.discovered)}</dd><dt>Round errors</dt><dd>{number(status?.subscription_rounds?.errors)}</dd></>} />
-            <WorkerCard title="WCA Live API" description="Recent-record polling and trusted claims" worker={status?.api_polling} extra={<><dt>Last poll</dt><dd>{age(status?.api_polling?.last_successful_poll_at)}</dd></>} />
+            <WorkerCard title="WCA Live API" description="Recent-record polling and trusted claims" worker={status?.api_polling} showMessage={false} showSnapshot={false} extra={<><dt>Last poll</dt><dd>{age(status?.api_polling?.last_successful_poll_at)}</dd></>} />
             <WorkerCard title="CubingChina" description="Read-only competition sockets" worker={status?.cubingchina_websocket} extra={<><dt>Connections</dt><dd>{number(status?.cubingchina_websocket?.connected_competition_count)} / {number(status?.cubingchina_websocket?.target_competition_count)}</dd><dt>Target rounds</dt><dd>{number(status?.cubingchina_websocket?.target_round_count)}</dd></>} />
           </div>
         </section>
