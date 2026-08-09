@@ -1,8 +1,10 @@
 import logging
 from time import monotonic
 
+from django.db import transaction
 from django.utils import timezone
 
+from apps.records.classification_work import mark_classification_scopes_dirty
 from apps.records.models import IngestionRun
 
 from .api_client import WCALiveAPIClient
@@ -24,21 +26,34 @@ def poll_recent_records(endpoint: str, run: IngestionRun | None = None) -> dict:
     created = 0
     duplicates = 0
     malformed = 0
-    for index, payload in enumerate(records):
-        try:
-            _record, was_created = ingest_api_record(payload, run, observed_at=observed_at)
-            created += int(was_created)
-            duplicates += int(not was_created)
-        except Exception:
-            malformed += 1
-            logger.exception("api_record_processing_failed record_index=%d", index)
+    dirty_scopes: set[tuple[str, str]] = set()
+    with transaction.atomic():
+        for index, payload in enumerate(records):
+            try:
+                _record, was_created = ingest_api_record(
+                    payload,
+                    run,
+                    observed_at=observed_at,
+                    defer_classification=True,
+                    dirty_scopes=dirty_scopes,
+                )
+                created += int(was_created)
+                duplicates += int(not was_created)
+            except Exception:
+                malformed += 1
+                logger.exception("api_record_processing_failed record_index=%d", index)
+        queued_scopes = mark_classification_scopes_dirty(
+            dirty_scopes,
+            observed_at=observed_at,
+        )
     duration = monotonic() - started
     logger.info(
-        "api_poll_completed records_found=%d new_observations=%d duplicates_ignored=%d malformed=%d duration_seconds=%.3f",
+        "api_poll_completed records_found=%d new_observations=%d duplicates_ignored=%d malformed=%d classification_scopes=%d duration_seconds=%.3f",
         len(records),
         created,
         duplicates,
         malformed,
+        queued_scopes,
         duration,
     )
     return {
@@ -46,5 +61,6 @@ def poll_recent_records(endpoint: str, run: IngestionRun | None = None) -> dict:
         "new_observations": created,
         "duplicates_ignored": duplicates,
         "malformed": malformed,
+        "classification_scopes_queued": queued_scopes,
         "duration_seconds": duration,
     }

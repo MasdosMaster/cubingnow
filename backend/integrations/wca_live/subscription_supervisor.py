@@ -192,29 +192,54 @@ class SubscriptionSupervisor:
             "catchup_minutes": self.catchup_minutes,
         }
         active_ids = {target.round_id for target in targets}
-        persisted = {}
-        for target in targets:
-            row, _created = SubscriptionRound.objects.update_or_create(
-                round_id=target.round_id,
-                defaults={
-                    "wca_live_competition_id": target.wca_live_competition_id,
-                    "wca_competition_id": target.wca_competition_id,
-                    "competition_name": target.competition_name,
-                    "competition_country_code": target.competition_country_code,
-                    "competition_start_date": target.competition_start_date,
-                    "competition_end_date": target.competition_end_date,
-                    "event_id": target.event_id,
-                    "event_name": target.event_name,
-                    "round_number": target.round_number,
-                    "round_name": target.round_name,
-                    "active": True,
-                },
+        if targets:
+            SubscriptionRound.objects.bulk_create(
+                [
+                    SubscriptionRound(
+                        round_id=target.round_id,
+                        wca_live_competition_id=target.wca_live_competition_id,
+                        wca_competition_id=target.wca_competition_id,
+                        competition_name=target.competition_name,
+                        competition_country_code=target.competition_country_code,
+                        competition_start_date=target.competition_start_date,
+                        competition_end_date=target.competition_end_date,
+                        event_id=target.event_id,
+                        event_name=target.event_name,
+                        round_number=target.round_number,
+                        round_name=target.round_name,
+                        active=True,
+                    )
+                    for target in targets
+                ],
+                update_conflicts=True,
+                unique_fields=["round_id"],
+                update_fields=[
+                    "wca_live_competition_id",
+                    "wca_competition_id",
+                    "competition_name",
+                    "competition_country_code",
+                    "competition_start_date",
+                    "competition_end_date",
+                    "event_id",
+                    "event_name",
+                    "round_number",
+                    "round_name",
+                    "active",
+                ],
             )
-            if _created or row.subscription_status == SubscriptionRound.Status.RETIRED:
-                row.subscription_status = SubscriptionRound.Status.DISCOVERED
-                row.subscription_id = ""
-                row.save(update_fields=["subscription_status", "subscription_id", "updated_at"])
-            persisted[row.round_id] = row
+            SubscriptionRound.objects.filter(
+                round_id__in=active_ids,
+                subscription_status=SubscriptionRound.Status.RETIRED,
+            ).update(
+                subscription_status=SubscriptionRound.Status.DISCOVERED,
+                subscription_id="",
+            )
+            persisted = SubscriptionRound.objects.in_bulk(
+                active_ids,
+                field_name="round_id",
+            )
+        else:
+            persisted = {}
         relevant = SubscriptionRound.objects.filter(
             competition_start_date__lte=self.weekend_end,
             competition_end_date__gte=self.weekend_start,

@@ -74,6 +74,42 @@ class NormalizedResultObservation:
             f"|{self.source_result_identity}|{self.event_id}|{self.kind}|{slot}"
         )
 
+    @property
+    def material_fingerprint(self) -> tuple:
+        """Fields that can change the reconciled fact or its canonical context.
+
+        Observation time, raw-frame linkage, and the full provider payload are
+        intentionally excluded. A new full snapshot should not rewrite every old
+        attempt merely because another attempt was added to the same result row.
+        """
+
+        return (
+            self.source,
+            self.ingestion_method,
+            self.source_result_identity,
+            self.source_competition_id,
+            self.source_competitor_id,
+            self.wca_competition_id,
+            self.competition_name,
+            self.competition_country_code,
+            self.competition_start_date,
+            self.competition_end_date,
+            self.round_id,
+            self.round_number,
+            self.round_name,
+            self.event_id,
+            self.event_name,
+            self.competitor_name,
+            self.competitor_wca_id,
+            self.country_code,
+            self.kind,
+            self.value,
+            self.attempt_number,
+            self.source_record_tag,
+            self.entered_at,
+            self.source_url,
+        )
+
 
 @dataclass(frozen=True)
 class ResultChange:

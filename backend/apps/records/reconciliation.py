@@ -201,11 +201,9 @@ def _refresh_canonical(result: CanonicalResult) -> None:
 @transaction.atomic
 def reconcile_result_observation(
     data: NormalizedResultObservation,
+    *,
+    defer_classification: bool = False,
 ) -> ResultObservation:
-    classification_lock, _created = ResultIdentityScope.objects.get_or_create(
-        key=f"classification|{data.event_id}|{data.kind}"
-    )
-    ResultIdentityScope.objects.select_for_update().get(pk=classification_lock.pk)
     identity_scope = None
     if data.natural_result_prefix:
         scope, _created = ResultIdentityScope.objects.get_or_create(key=data.natural_result_prefix)
@@ -265,8 +263,9 @@ def reconcile_result_observation(
     observation.save()
 
     _refresh_canonical(result)
-    validate_result_against_latest_snapshot(result)
-    reclassify_scope(result.event_id, result.kind)
+    if not defer_classification:
+        validate_result_against_latest_snapshot(result)
+        reclassify_scope(result.event_id, result.kind)
     logger.info(
         "result_observation_reconciled source=%s method=%s observation_id=%s canonical_result_id=%s revision=%s",
         data.source,
@@ -279,7 +278,12 @@ def reconcile_result_observation(
 
 
 @transaction.atomic
-def retract_result_observation(observation_key: str, observed_at) -> bool:
+def retract_result_observation(
+    observation_key: str,
+    observed_at,
+    *,
+    defer_classification: bool = False,
+) -> bool:
     observation = (
         ResultObservation.objects.select_for_update()
         .select_related("canonical_result")
@@ -294,6 +298,7 @@ def retract_result_observation(observation_key: str, observed_at) -> bool:
     observation.save(update_fields=["status", "last_observed_at", "revision", "updated_at"])
     result = observation.canonical_result
     _refresh_canonical(result)
-    validate_result_against_latest_snapshot(result)
-    reclassify_scope(result.event_id, result.kind)
+    if not defer_classification:
+        validate_result_against_latest_snapshot(result)
+        reclassify_scope(result.event_id, result.kind)
     return True

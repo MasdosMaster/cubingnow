@@ -1,17 +1,19 @@
 import copy
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from django.utils import timezone
 
 from apps.records.models import (
+    ClassificationScopeWork,
     RecentRecordObservation,
     SourceObservation,
     SubscriptionResultState,
     SubscriptionRound,
 )
+from integrations.wca_live import subscription_ingestion
 from integrations.wca_live.discovery import (
     competition_lookback,
     competition_overlaps,
@@ -100,12 +102,8 @@ def candidate(method_time=None):
 
 def test_competition_weekend_overlap_is_inclusive():
     start, end = date(2026, 8, 6), date(2026, 8, 10)
-    assert competition_overlaps(
-        {"startDate": "2026-08-01", "endDate": "2026-08-06"}, start, end
-    )
-    assert competition_overlaps(
-        {"startDate": "2026-08-10", "endDate": "2026-08-12"}, start, end
-    )
+    assert competition_overlaps({"startDate": "2026-08-01", "endDate": "2026-08-06"}, start, end)
+    assert competition_overlaps({"startDate": "2026-08-10", "endDate": "2026-08-12"}, start, end)
     assert not competition_overlaps(
         {"startDate": "2026-08-01", "endDate": "2026-08-05"}, start, end
     )
@@ -117,9 +115,12 @@ def test_lookback_includes_competitions_starting_before_weekend():
         {"id": "before", "startDate": "2026-08-05", "endDate": "2026-08-07"},
         {"id": "old", "startDate": "2026-07-20", "endDate": "2026-07-21"},
     ]
-    assert [item["id"] for item in filter_overlapping_competitions(
-        competitions, date(2026, 8, 6), date(2026, 8, 10)
-    )] == ["before"]
+    assert [
+        item["id"]
+        for item in filter_overlapping_competitions(
+            competitions, date(2026, 8, 6), date(2026, 8, 10)
+        )
+    ] == ["before"]
 
 
 def test_flattens_competitions_events_and_rounds():
@@ -248,6 +249,51 @@ def test_duplicate_snapshot_and_restart_recovery_are_idempotent():
 
 
 @pytest.mark.django_db
+def test_snapshot_batches_dirty_scope_requests_instead_of_reclassifying_per_attempt(
+    monkeypatch,
+):
+    create_round()
+    observed_at = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
+    initial = snapshot()
+    first = process_round_snapshot("round-1", initial, catchup_minutes=300, observed_at=observed_at)
+    assert first["classification_scopes_queued"] == 2
+    assert set(ClassificationScopeWork.objects.values_list("kind", "requested_version")) == {
+        ("single", 1),
+        ("average", 1),
+    }
+
+    changed = copy.deepcopy(initial)
+    changed["results"][0]["attempts"].append({"result": 630})
+    changed["results"][0]["average"] = 615
+    reconciled = []
+    original_reconcile = subscription_ingestion.reconcile_result_observation
+
+    def count_reconcile(row, **kwargs):
+        reconciled.append(row.observation_key)
+        return original_reconcile(row, **kwargs)
+
+    monkeypatch.setattr(
+        subscription_ingestion,
+        "reconcile_result_observation",
+        count_reconcile,
+    )
+    second = process_round_snapshot(
+        "round-1",
+        changed,
+        catchup_minutes=300,
+        observed_at=observed_at + timedelta(seconds=1),
+    )
+
+    assert second["changes"] == 1
+    assert second["classification_scopes_queued"] == 2
+    assert len(reconciled) == 2
+    assert set(ClassificationScopeWork.objects.values_list("kind", "requested_version")) == {
+        ("single", 2),
+        ("average", 2),
+    }
+
+
+@pytest.mark.django_db
 def test_record_snapshot_sequence_and_correction():
     create_round()
     observed_at = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
@@ -295,9 +341,7 @@ def test_initial_snapshot_catches_up_only_recent_unprocessed_records():
     observed_at = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
     initial = snapshot()
     initial["results"].append(new_result("result-recent", best=479, single_tag="WR"))
-    stats = process_round_snapshot(
-        "round-1", initial, catchup_minutes=60, observed_at=observed_at
-    )
+    stats = process_round_snapshot("round-1", initial, catchup_minutes=60, observed_at=observed_at)
     assert stats["initial_snapshot"]
     assert stats["records_detected"] == 1
     assert RecentRecordObservation.objects.get().stable_result_identity == "result-recent"

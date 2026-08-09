@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from django.conf import settings
-from django.db.models import OuterRef, Q, Subquery
+from django.db.models import F, Max, Min, OuterRef, Q, Subquery
 from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -9,6 +9,7 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from .models import (
     Achievement,
+    ClassificationScopeWork,
     CubingChinaCompetitionTarget,
     CubingChinaRoundTarget,
     IngestionWorkerStatus,
@@ -147,6 +148,32 @@ def _worker_payload(method: str) -> dict:
 
 @api_view(["GET"])
 def ingestion_status(request):
+    classification_pending = ClassificationScopeWork.objects.filter(
+        requested_version__gt=F("processed_version")
+    )
+    classification_times = classification_pending.aggregate(
+        oldest_dirty_since=Min("dirty_since"),
+        oldest_observed_at=Min("oldest_observed_at"),
+    )
+    classification_completed = ClassificationScopeWork.objects.aggregate(
+        last_completed_at=Max("last_completed_at"),
+        max_last_duration_ms=Max("last_duration_ms"),
+    )
+    oldest_observed_at = classification_times["oldest_observed_at"]
+    classification_health = {
+        "pending_scope_count": classification_pending.count(),
+        "claimed_scope_count": classification_pending.exclude(claimed_by="").count(),
+        "failed_scope_count": classification_pending.exclude(last_error="").count(),
+        "oldest_dirty_since": _iso(classification_times["oldest_dirty_since"]),
+        "oldest_observed_at": _iso(oldest_observed_at),
+        "oldest_observation_lag_seconds": (
+            max((timezone.now() - oldest_observed_at).total_seconds(), 0)
+            if oldest_observed_at
+            else 0
+        ),
+        "last_completed_at": _iso(classification_completed["last_completed_at"]),
+        "max_last_duration_ms": classification_completed["max_last_duration_ms"],
+    }
     round_counts = {
         "discovered": SubscriptionRound.objects.filter(active=True).count(),
         "subscribed": SubscriptionRound.objects.filter(
@@ -208,6 +235,7 @@ def ingestion_status(request):
                 RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION
             ),
             "cubingchina_websocket": cubingchina_worker,
+            "classification": classification_health,
             "subscription_rounds": round_counts,
             "configuration": {
                 "weekend_start": settings.WCA_WEEKEND_START,

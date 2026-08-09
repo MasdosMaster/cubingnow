@@ -79,6 +79,7 @@ class WCALiveSubscriptionClient:
         """Return a JSON-safe summary suitable for health metadata and logs."""
         return {
             "counters": dict(self._frame_counters),
+            "message_queue_size": self._messages.qsize(),
             "last_frame": self._last_frame,
             "last_unexpected_frame": self._last_unexpected_frame,
         }

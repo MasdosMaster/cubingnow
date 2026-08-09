@@ -79,6 +79,8 @@ def persist_record_candidate(
     *,
     raw_observation: SourceObservation | None = None,
     reconcile: bool = True,
+    defer_classification: bool = False,
+    dirty_scopes: set[tuple[str, str]] | None = None,
 ) -> tuple[RecentRecordObservation, bool]:
     if candidate.record_level not in RECORD_LEVELS:
         raise ValueError(f"Unsupported WCA record level: {candidate.record_level!r}")
@@ -202,7 +204,12 @@ def persist_record_candidate(
             normalized_payload=source_payload,
             raw_observation_id=getattr(raw_observation, "pk", None),
         )
-        result_observation = reconcile_result_observation(normalized)
+        result_observation = reconcile_result_observation(
+            normalized,
+            defer_classification=defer_classification,
+        )
+        if defer_classification and dirty_scopes is not None:
+            dirty_scopes.add((candidate.event_id, candidate.kind))
         if observation.canonical_result_id != result_observation.canonical_result_id:
             observation.canonical_result = result_observation.canonical_result
             observation.save(update_fields=["canonical_result"])
@@ -211,7 +218,12 @@ def persist_record_candidate(
 
 @transaction.atomic
 def ingest_api_record(
-    payload: dict, run: IngestionRun | None = None, observed_at=None
+    payload: dict,
+    run: IngestionRun | None = None,
+    observed_at=None,
+    *,
+    defer_classification: bool = False,
+    dirty_scopes: set[tuple[str, str]] | None = None,
 ) -> tuple[RecentRecordObservation, bool]:
     observed_at = observed_at or timezone.now()
     observation, raw_created = store_observation(
@@ -223,6 +235,20 @@ def ingest_api_record(
     )
     try:
         item = map_record(payload, observed_at)
+        if observation.processed_at:
+            existing = RecentRecordObservation.objects.filter(
+                stable_result_identity=item.stable_result_identity,
+                kind=item.kind,
+                record_level=item.record_level,
+                ingestion_method=RecentRecordObservation.IngestionMethod.API_POLLING,
+            ).first()
+            if existing is not None:
+                logger.info(
+                    "api_record_duplicate_ignored result_id=%s record_level=%s",
+                    item.wca_live_result_id,
+                    item.record_level,
+                )
+                return existing, False
         RecentRecordObservation.objects.filter(
             stable_result_identity=item.stable_result_identity,
             kind=item.kind,
@@ -238,6 +264,8 @@ def ingest_api_record(
             RecentRecordObservation.IngestionMethod.API_POLLING,
             payload,
             raw_observation=observation,
+            defer_classification=defer_classification,
+            dirty_scopes=dirty_scopes,
         )
         if not observation.processed_at:
             observation.processed_at = timezone.now()

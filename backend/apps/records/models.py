@@ -93,6 +93,43 @@ class ResultIdentityScope(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class ClassificationScopeWork(models.Model):
+    """Durable, versioned request to rebuild one event/kind classification scope."""
+
+    event_id = models.CharField(max_length=16)
+    kind = models.CharField(
+        max_length=8,
+        choices=(("single", "Single"), ("average", "Average")),
+    )
+    requested_version = models.PositiveBigIntegerField(default=0)
+    processed_version = models.PositiveBigIntegerField(default=0)
+    dirty_since = models.DateTimeField(null=True, blank=True)
+    oldest_observed_at = models.DateTimeField(null=True, blank=True)
+    not_before = models.DateTimeField(null=True, blank=True, db_index=True)
+    claimed_by = models.CharField(max_length=128, blank=True)
+    claim_expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_started_at = models.DateTimeField(null=True, blank=True)
+    last_completed_at = models.DateTimeField(null=True, blank=True)
+    last_duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    last_result_count = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event_id", "kind"], name="unique_classification_scope_work"
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["dirty_since", "not_before"],
+                name="classification_work_ready_idx",
+            )
+        ]
+
+
 class CanonicalResult(models.Model):
     """One real competition result, independently of how many sources observed it."""
 

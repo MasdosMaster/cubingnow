@@ -72,3 +72,15 @@ _Avoid_: Record, Canonical Result
 **Ingestion Run**:
 A bounded subscription or reconciliation activity that receives Source Observations and processes them into CubingNow's current domain data.
 _Avoid_: Import, sync
+
+**Classification Pass**:
+One deterministic recalculation of the Achievements and Qualification Decisions for all current Canonical Results in a single event and result kind. It reads committed facts and stored benchmarks; it does not poll an external provider.
+_Avoid_: Ingestion, API poll
+
+**Classification Replay**:
+The chronological calculation inside a Classification Pass. It starts from historical record and personal-best baselines, then walks current results in entry order so corrections and retractions can change later classifications correctly.
+_Avoid_: Provider replay, message retry
+
+**Dirty Classification Scope**:
+A durable, versioned request saying that one event and result kind must receive a new Classification Pass because committed facts changed. Many changed attempts in one ingestion transaction create one version increment for that scope.
+_Avoid_: WebSocket queue item, result observation

@@ -4,17 +4,27 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 
 from apps.notifications.models import NotificationEvent
+from apps.records.classification import reclassify_scope
+from apps.records.classification_work import (
+    mark_classification_scopes_dirty,
+    process_ready_scopes,
+    worker_identity,
+)
 from apps.records.domain import NormalizedResultObservation
 from apps.records.models import (
     Achievement,
     CanonicalResult,
+    ClassificationScopeWork,
     PersonalBestBaseline,
     RecordBenchmark,
     RecordValidation,
     ResultObservation,
     WCARecordSnapshot,
 )
-from apps.records.reconciliation import reconcile_result_observation
+from apps.records.reconciliation import (
+    reconcile_result_observation,
+    retract_result_observation,
+)
 from apps.records.snapshot_differ import diff_result_values
 from integrations.wca.record_validation import (
     parse_wca_records,
@@ -470,9 +480,7 @@ def test_official_level_rejection_overrides_stale_higher_live_baselines():
     result = reconcile_result_observation(observed(value=412)).canonical_result
 
     assert set(
-        Achievement.objects.filter(result=result, status="active").values_list(
-            "type", flat=True
-        )
+        Achievement.objects.filter(result=result, status="active").values_list("type", flat=True)
     ) == {"NR"}
     assert Achievement.objects.get(result=result, type="NR").qualification.show_on_homepage
 
@@ -487,3 +495,99 @@ def test_wca_snapshots_are_content_deduplicated_but_rechecked():
         payload, source_url="https://www.worldcubeassociation.org/api/v0/records"
     )
     assert WCARecordSnapshot.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_deferred_reconciliation_is_classified_once_by_durable_scope_worker():
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    item = observed(
+        method="graphql_subscription",
+        source="wca_live",
+        value=390,
+        claim="WR",
+    )
+    row = reconcile_result_observation(item, defer_classification=True)
+
+    assert not Achievement.objects.filter(result=row.canonical_result).exists()
+    assert (
+        mark_classification_scopes_dirty(
+            {("333", "single")},
+            observed_at=item.observed_at,
+            debounce_seconds=0,
+        )
+        == 1
+    )
+    work = ClassificationScopeWork.objects.get(event_id="333", kind="single")
+    assert work.requested_version == 1
+    assert work.processed_version == 0
+
+    assert process_ready_scopes(worker_identity(), limit=1) == 1
+
+    work.refresh_from_db()
+    assert work.requested_version == work.processed_version == 1
+    assert work.dirty_since is None
+    assert work.last_result_count == 1
+    achievement = Achievement.objects.get(result=row.canonical_result, type="WR")
+    assert achievement.qualification.notification_eligible is True
+
+
+@pytest.mark.django_db
+def test_scope_classification_query_count_is_bounded_across_a_large_burst(
+    django_assert_max_num_queries,
+):
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=1000
+    )
+    for index in range(50):
+        reconcile_result_observation(
+            observed(
+                method="graphql_subscription",
+                source="wca_live",
+                source_result=f"burst-result-{index}",
+                competitor=f"2026TEST{index:02d}",
+                value=900 - index,
+                claim="WR",
+            ),
+            defer_classification=True,
+        )
+
+    with django_assert_max_num_queries(20):
+        reclassify_scope("333", "single")
+
+    assert Achievement.objects.filter(type="WR", status="active").count() == 50
+
+
+@pytest.mark.django_db
+def test_scope_worker_removes_stale_validation_after_source_retraction():
+    refresh_wca_record_validations(
+        wca_records_payload(),
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    item = observed(value=390)
+    row = reconcile_result_observation(item, defer_classification=True)
+    mark_classification_scopes_dirty(
+        {("333", "single")},
+        observed_at=item.observed_at,
+        debounce_seconds=0,
+    )
+    worker_id = worker_identity()
+    assert process_ready_scopes(worker_id, limit=1) == 1
+    assert RecordValidation.objects.filter(result=row.canonical_result).exists()
+
+    retracted_at = item.observed_at + timedelta(seconds=1)
+    assert retract_result_observation(
+        item.observation_key,
+        retracted_at,
+        defer_classification=True,
+    )
+    mark_classification_scopes_dirty(
+        {("333", "single")},
+        observed_at=retracted_at,
+        debounce_seconds=0,
+    )
+    assert process_ready_scopes(worker_id, limit=1) == 1
+
+    assert not RecordValidation.objects.filter(result=row.canonical_result).exists()
+    assert not Achievement.objects.filter(result=row.canonical_result, status="active").exists()

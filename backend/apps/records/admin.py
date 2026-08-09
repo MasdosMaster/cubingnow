@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     Achievement,
     CanonicalResult,
+    ClassificationScopeWork,
     CubingChinaCompetitionTarget,
     CubingChinaResultState,
     CubingChinaRoundTarget,
@@ -94,3 +95,20 @@ admin.site.register(RecordValidation)
 admin.site.register(WCARecordSnapshot)
 admin.site.register(PersonalBestBaseline)
 admin.site.register(ResultIdentityScope)
+
+
+@admin.register(ClassificationScopeWork)
+class ClassificationScopeWorkAdmin(admin.ModelAdmin):
+    list_display = (
+        "event_id",
+        "kind",
+        "requested_version",
+        "processed_version",
+        "dirty_since",
+        "claimed_by",
+        "last_duration_ms",
+        "last_result_count",
+        "last_completed_at",
+    )
+    list_filter = ("kind",)
+    search_fields = ("event_id", "claimed_by", "last_error")
