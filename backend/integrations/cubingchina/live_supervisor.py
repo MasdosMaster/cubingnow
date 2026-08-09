@@ -4,6 +4,7 @@ import random
 from datetime import UTC, datetime, time, timedelta
 
 from asgiref.sync import sync_to_async
+from django.conf import settings
 from django.utils import timezone
 
 from apps.records.models import (
@@ -164,7 +165,20 @@ class CubingChinaLiveSupervisor:
                     async with client:
                         reconnect_attempt = 0
                         target = await self._db(self._mark_connected, target_id)
-                        await self._connected_session(client, target)
+                        telemetry_task = asyncio.create_task(
+                            self._telemetry_loop(target_id, client),
+                            name=f"cubingchina-telemetry-{target_id}",
+                        )
+                        try:
+                            await self._connected_session(client, target)
+                        finally:
+                            telemetry_task.cancel()
+                            await asyncio.gather(telemetry_task, return_exceptions=True)
+                            await self._db(
+                                self._persist_websocket_diagnostics,
+                                target_id,
+                                self._client_diagnostics(client),
+                            )
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -183,6 +197,20 @@ class CubingChinaLiveSupervisor:
             finally:
                 if client is not None:
                     await self._db(self._mark_disconnected, target_id)
+
+    async def _telemetry_loop(self, target_id: int, client) -> None:
+        while not self._stopping:
+            await self._db(
+                self._persist_websocket_diagnostics,
+                target_id,
+                self._client_diagnostics(client),
+            )
+            await asyncio.sleep(settings.WORKER_TELEMETRY_INTERVAL_SECONDS)
+
+    @staticmethod
+    def _client_diagnostics(client) -> dict:
+        diagnostics = getattr(client, "websocket_diagnostics", {})
+        return diagnostics if isinstance(diagnostics, dict) else {}
 
     async def _connected_session(self, client, target: dict) -> None:
         users = {}
@@ -495,6 +523,16 @@ class CubingChinaLiveSupervisor:
         return CubingChinaCompetitionTarget.objects.values(
             "id", "cubingchina_id", "slug"
         ).get(pk=target_id)
+
+    @staticmethod
+    def _persist_websocket_diagnostics(target_id: int, diagnostics: dict) -> None:
+        now = timezone.now()
+        CubingChinaCompetitionTarget.objects.filter(pk=target_id).update(
+            websocket_diagnostics=diagnostics
+        )
+        IngestionWorkerStatus.objects.filter(ingestion_method=METHOD).update(
+            heartbeat_at=now
+        )
 
     @staticmethod
     def _mark_disconnected(target_id: int) -> None:

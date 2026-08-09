@@ -93,7 +93,9 @@ class SubscriptionSupervisor:
     async def _connected_loop(self, client, targets: dict[str, SubscriptionRound]) -> None:
         message_task = asyncio.create_task(client.next_message())
         discovery_task = asyncio.create_task(asyncio.sleep(self.discovery_interval))
-        heartbeat_task = asyncio.create_task(asyncio.sleep(30))
+        heartbeat_task = asyncio.create_task(
+            asyncio.sleep(settings.WORKER_TELEMETRY_INTERVAL_SECONDS)
+        )
         try:
             while not self._stopping and timezone.now().date() <= self.weekend_end:
                 done, _pending = await asyncio.wait(
@@ -131,7 +133,9 @@ class SubscriptionSupervisor:
                     discovery_task = asyncio.create_task(asyncio.sleep(self.discovery_interval))
                 if heartbeat_task in done:
                     await self._db(self._heartbeat, client.websocket_diagnostics)
-                    heartbeat_task = asyncio.create_task(asyncio.sleep(30))
+                    heartbeat_task = asyncio.create_task(
+                        asyncio.sleep(settings.WORKER_TELEMETRY_INTERVAL_SECONDS)
+                    )
         finally:
             for task in (message_task, discovery_task, heartbeat_task):
                 task.cancel()

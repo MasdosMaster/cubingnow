@@ -1,19 +1,29 @@
 from datetime import datetime, timedelta
+from time import perf_counter
 
 from django.conf import settings
-from django.db.models import F, Max, Min, OuterRef, Q, Subquery
+from django.db.models import Count, F, Max, Min, OuterRef, Q, Subquery
 from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
+from apps.notifications.models import (
+    NotificationDelivery,
+    NotificationEndpoint,
+    NotificationEvent,
+)
+
 from .models import (
     Achievement,
+    CanonicalResult,
     ClassificationScopeWork,
     CubingChinaCompetitionTarget,
     CubingChinaRoundTarget,
     IngestionWorkerStatus,
     RecentRecordObservation,
+    ResultObservation,
+    SourceObservation,
     SubscriptionRound,
 )
 from .serializers import AchievementSerializer, RecentRecordObservationSerializer
@@ -146,8 +156,90 @@ def _worker_payload(method: str) -> dict:
     return payload
 
 
+def _websocket_queue_payload(diagnostics: dict | None) -> dict:
+    diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+    counters = diagnostics.get("counters")
+
+    def nonnegative_int(value) -> int:
+        try:
+            return max(int(value or 0), 0)
+        except (TypeError, ValueError):
+            return 0
+
+    return {
+        "message_queue_size": nonnegative_int(diagnostics.get("message_queue_size")),
+        "peak_message_queue_size": nonnegative_int(
+            diagnostics.get("peak_message_queue_size")
+        ),
+        "queue_capacity": diagnostics.get("queue_capacity"),
+        "captured_at": diagnostics.get("captured_at"),
+        "counters": counters if isinstance(counters, dict) else {},
+        "last_frame": (
+            diagnostics.get("last_frame")
+            if isinstance(diagnostics.get("last_frame"), dict)
+            else None
+        ),
+    }
+
+
+def _notification_health(now) -> dict:
+    counts = {choice: 0 for choice, _label in NotificationDelivery.Status.choices}
+    counts.update(
+        {
+            row["status"]: row["count"]
+            for row in NotificationDelivery.objects.values("status").annotate(
+                count=Count("id")
+            )
+        }
+    )
+    queued = NotificationDelivery.objects.filter(
+        status__in=[
+            NotificationDelivery.Status.PENDING,
+            NotificationDelivery.Status.RETRY,
+        ]
+    )
+    due = queued.filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))
+    oldest = queued.aggregate(created_at=Min("created_at"))["created_at"]
+    last_sent = NotificationDelivery.objects.filter(
+        status=NotificationDelivery.Status.SENT
+    ).aggregate(sent_at=Max("sent_at"))["sent_at"]
+    return {
+        "deliveries": counts,
+        "queued_count": queued.count(),
+        "due_count": due.count(),
+        "oldest_queued_at": _iso(oldest),
+        "oldest_queue_age_seconds": max((now - oldest).total_seconds(), 0) if oldest else 0,
+        "last_sent_at": _iso(last_sent),
+        "events_count": NotificationEvent.objects.count(),
+        "events_last_24h": NotificationEvent.objects.filter(
+            created_at__gte=now - timedelta(hours=24)
+        ).count(),
+        "active_endpoint_count": NotificationEndpoint.objects.filter(active=True).count(),
+        "inactive_endpoint_count": NotificationEndpoint.objects.filter(active=False).count(),
+    }
+
+
+def _record_pipeline_health() -> dict:
+    return {
+        "source_observation_count": SourceObservation.objects.count(),
+        "result_observation_count": ResultObservation.objects.count(),
+        "canonical_result_count": CanonicalResult.objects.count(),
+        "active_achievement_count": Achievement.objects.filter(
+            status=Achievement.Status.ACTIVE
+        ).count(),
+        "pending_validation_count": CanonicalResult.objects.filter(
+            validation_status=CanonicalResult.ValidationStatus.PENDING
+        ).count(),
+        "rejected_validation_count": CanonicalResult.objects.filter(
+            validation_status=CanonicalResult.ValidationStatus.REJECTED
+        ).count(),
+    }
+
+
 @api_view(["GET"])
 def ingestion_status(request):
+    started_at = perf_counter()
+    now = timezone.now()
     classification_pending = ClassificationScopeWork.objects.filter(
         requested_version__gt=F("processed_version")
     )
@@ -167,7 +259,7 @@ def ingestion_status(request):
         "oldest_dirty_since": _iso(classification_times["oldest_dirty_since"]),
         "oldest_observed_at": _iso(oldest_observed_at),
         "oldest_observation_lag_seconds": (
-            max((timezone.now() - oldest_observed_at).total_seconds(), 0)
+            max((now - oldest_observed_at).total_seconds(), 0)
             if oldest_observed_at
             else 0
         ),
@@ -203,20 +295,40 @@ def ingestion_status(request):
     cubingchina_worker.update(cubingchina_counts)
     competition_health = list(
         CubingChinaCompetitionTarget.objects.filter(active=True)
+        .annotate(
+            active_round_count=Count("rounds", filter=Q(rounds__active=True))
+        )
         .order_by("competition_start_date", "slug")
         .values(
             "slug",
+            "competition_name",
             "wca_competition_id",
             "status",
             "connected",
+            "last_connected_at",
             "last_message_at",
             "last_snapshot_at",
             "last_error",
+            "websocket_diagnostics",
+            "active_round_count",
         )
     )
+    cubingchina_counters = {}
+    cubingchina_queue_size = 0
+    cubingchina_peak_queue_size = 0
     for target in competition_health:
+        target["last_connected_at"] = _iso(target["last_connected_at"])
         target["last_message_at"] = _iso(target["last_message_at"])
         target["last_snapshot_at"] = _iso(target["last_snapshot_at"])
+        queue = _websocket_queue_payload(target.pop("websocket_diagnostics"))
+        target["websocket"] = queue
+        cubingchina_queue_size += queue["message_queue_size"]
+        cubingchina_peak_queue_size = max(
+            cubingchina_peak_queue_size, queue["peak_message_queue_size"]
+        )
+        for key, value in queue["counters"].items():
+            if isinstance(value, int):
+                cubingchina_counters[key] = cubingchina_counters.get(key, 0) + value
     cubingchina_worker["metadata"] = {
         **cubingchina_worker["metadata"],
         "competitions": competition_health,
@@ -226,26 +338,54 @@ def ingestion_status(request):
             (target["last_error"] for target in competition_health if target["last_error"]),
             "",
         )
-    return Response(
-        {
-            "api_polling": _worker_payload(
-                RecentRecordObservation.IngestionMethod.API_POLLING
-            ),
-            "graphql_subscription": _worker_payload(
-                RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION
-            ),
-            "cubingchina_websocket": cubingchina_worker,
-            "classification": classification_health,
-            "subscription_rounds": round_counts,
-            "configuration": {
-                "weekend_start": settings.WCA_WEEKEND_START,
-                "weekend_end": settings.WCA_WEEKEND_END,
-                "lookback_days": settings.WCA_COMPETITION_LOOKBACK_DAYS,
-                "catchup_minutes": settings.WCA_SUBSCRIPTION_CATCHUP_MINUTES,
-            },
-            "generated_at": _iso(timezone.now()),
-        }
+    graphql_worker = _worker_payload(
+        RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION
     )
+    websocket_queues = {
+        "wca_live": {
+            **_websocket_queue_payload(graphql_worker["metadata"].get("websocket")),
+            "connected": graphql_worker.get("connected", False),
+            "connection_count": 1 if graphql_worker.get("connected") else 0,
+        },
+        "cubingchina": {
+            "message_queue_size": cubingchina_queue_size,
+            "peak_message_queue_size": cubingchina_peak_queue_size,
+            "queue_capacity": None,
+            "captured_at": max(
+                (
+                    target["websocket"]["captured_at"]
+                    for target in competition_health
+                    if target["websocket"]["captured_at"]
+                ),
+                default=None,
+            ),
+            "counters": cubingchina_counters,
+            "connected": cubingchina_worker.get("connected", False),
+            "connection_count": cubingchina_counts["connected_competition_count"],
+        },
+    }
+    payload = {
+        "api_polling": _worker_payload(
+            RecentRecordObservation.IngestionMethod.API_POLLING
+        ),
+        "graphql_subscription": graphql_worker,
+        "cubingchina_websocket": cubingchina_worker,
+        "websocket_queues": websocket_queues,
+        "classification": classification_health,
+        "notifications": _notification_health(now),
+        "record_pipeline": _record_pipeline_health(),
+        "subscription_rounds": round_counts,
+        "configuration": {
+            "weekend_start": settings.WCA_WEEKEND_START,
+            "weekend_end": settings.WCA_WEEKEND_END,
+            "lookback_days": settings.WCA_COMPETITION_LOOKBACK_DAYS,
+            "catchup_minutes": settings.WCA_SUBSCRIPTION_CATCHUP_MINUTES,
+            "telemetry_interval_seconds": settings.WORKER_TELEMETRY_INTERVAL_SECONDS,
+        },
+        "generated_at": _iso(now),
+    }
+    payload["response_generation_ms"] = round((perf_counter() - started_at) * 1000, 2)
+    return Response(payload)
 
 
 @api_view(["GET"])

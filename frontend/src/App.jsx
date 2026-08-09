@@ -1,42 +1,15 @@
 import { useEffect, useState } from "react";
-import { getIngestionStatus, getRecentRecords, getRecords, getWeekendCompetitors } from "./api/client";
+import { getRecords, getWeekendCompetitors } from "./api/client";
 import { AchievementList } from "./components/AchievementList";
-import { RecordList } from "./components/RecordList";
 import { NotificationSettings } from "./components/NotificationSettings";
 import { WeekendCompetitorList } from "./components/WeekendCompetitorList";
+import { DebugDashboard } from "./components/DebugDashboard";
 import MoonIcon from "./assets/icons/Moon_of_May_complex.svg";
 import SunIcon from "./assets/icons/Sun_of_May_simplified.svg";
 import "./styles.css";
 
 const levels = ["WR", "CR", "NR", "PR"];
 const REFRESH_INTERVAL_MS = 30_000;
-
-function usePipelineRecords(source, level, query) {
-  const [state, setState] = useState({ records: [], loading: true, error: "" });
-
-  useEffect(() => {
-    let current = true;
-    const refresh = async (showLoading = false) => {
-      if (showLoading) setState((previous) => ({ ...previous, loading: true }));
-      try {
-        const records = await getRecentRecords({ source, level, query });
-        if (current) setState({ records, loading: false, error: "" });
-      } catch (reason) {
-        if (current) {
-          setState((previous) => ({ ...previous, loading: false, error: reason.message }));
-        }
-      }
-    };
-    refresh(true);
-    const interval = window.setInterval(() => refresh(false), REFRESH_INTERVAL_MS);
-    return () => {
-      current = false;
-      window.clearInterval(interval);
-    };
-  }, [source, level, query]);
-
-  return state;
-}
 
 function useAchievementRecords(level, query) {
   const [state, setState] = useState({ records: [], loading: true, error: "" });
@@ -95,42 +68,16 @@ function useWeekendCompetitors(continent) {
   return state;
 }
 
-export default function App() {
+function HomePage() {
   const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem("cubingnow-theme") === "dark");
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState(null);
-  const [statusError, setStatusError] = useState("");
   const [continent, setContinent] = useState("");
-  const api = usePipelineRecords("api_polling", "", query);
-  const subscriptions = usePipelineRecords("graphql_subscription", "", query);
-  const cubingChina = usePipelineRecords("cubingchina_websocket", "", query);
   const weekendCompetitors = useWeekendCompetitors(continent);
 
   useEffect(() => {
     document.documentElement.dataset.theme = darkMode ? "dark" : "light";
     window.localStorage.setItem("cubingnow-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
-
-  useEffect(() => {
-    let current = true;
-    const refresh = async () => {
-      try {
-        const payload = await getIngestionStatus();
-        if (current) {
-          setStatus(payload);
-          setStatusError("");
-        }
-      } catch (reason) {
-        if (current) setStatusError(reason.message);
-      }
-    };
-    refresh();
-    const interval = window.setInterval(refresh, REFRESH_INTERVAL_MS);
-    return () => {
-      current = false;
-      window.clearInterval(interval);
-    };
-  }, []);
 
   return (
     <>
@@ -139,6 +86,7 @@ export default function App() {
           <a className="brand" href="/">CubingNow</a>
           <div className="header-actions">
             <span className="api-label">Live cubing achievements</span>
+            <a className="header-link" href="/debug">Debug</a>
             <button
               aria-label={darkMode ? "Use light mode" : "Use dark mode"}
               aria-pressed={darkMode}
@@ -162,31 +110,7 @@ export default function App() {
           <input aria-label="Search records" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records" />
         </section>
         <NotificationSettings />
-        {statusError && <p className="status-warning">Worker health unavailable: {statusError}</p>}
         {levels.map((item) => <PublicAchievementSection key={item} level={item} query={query} />)}
-        <details className="source-monitoring">
-          <summary>Source monitoring and provider claims</summary>
-          <p>These debugging projections show what each provider reported. They are evidence, not CubingNow&apos;s classification.</p>
-          <RecordList
-            title="Source observations — WCA Live GraphQL"
-            subtitle="Persisted full-round snapshot diffs"
-            {...subscriptions}
-            worker={status?.graphql_subscription}
-            roundStatus={status?.subscription_rounds}
-          />
-          <RecordList
-            title="Source observations — WCA Live API"
-            subtitle="WCA Live recentRecords query"
-            {...api}
-            worker={status?.api_polling}
-          />
-          <RecordList
-            title="Source observations — CubingChina"
-            subtitle="Untrusted provider claims retained for comparison"
-            {...cubingChina}
-            worker={status?.cubingchina_websocket}
-          />
-        </details>
         <WeekendCompetitorList
           {...weekendCompetitors}
           continent={continent}
@@ -196,4 +120,9 @@ export default function App() {
       <footer><span>CubingNow</span><span>Unofficial observational companion to WCA Live</span></footer>
     </>
   );
+}
+
+export default function App() {
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  return path === "/debug" ? <DebugDashboard /> : <HomePage />;
 }

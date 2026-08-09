@@ -365,6 +365,12 @@ def test_websocket_client_uses_verified_read_only_frames():
         await client.request_results("333", "1")
         await socket.received.put(json.dumps({"code": 200, "type": "result.all", "data": []}))
         assert (await client.next_message())["type"] == "result.all"
+        diagnostics = client.websocket_diagnostics
+        assert diagnostics["message_queue_size"] == 0
+        assert diagnostics["peak_message_queue_size"] == 1
+        assert diagnostics["counters"]["frames_received"] == 1
+        assert diagnostics["counters"]["messages_queued"] == 1
+        assert diagnostics["counters"]["messages_dequeued"] == 1
         assert socket.sent == [
             {"type": "competition", "competitionId": 2468},
             {"type": "result", "action": "rounds"},

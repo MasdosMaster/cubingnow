@@ -614,6 +614,7 @@ class CubingChinaCompetitionTarget(models.Model):
     last_message_at = models.DateTimeField(null=True, blank=True)
     last_snapshot_at = models.DateTimeField(null=True, blank=True)
     last_error = models.TextField(blank=True)
+    websocket_diagnostics = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

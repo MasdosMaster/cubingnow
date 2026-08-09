@@ -94,6 +94,9 @@ is refreshed by its independent periodic process.
 The WebSocket message queue remains unbounded. Its size is exposed in worker
 diagnostics so throughput can be measured directly; the design relies on processing
 faster than sustained arrival rather than discarding or coalescing provider frames.
+Both WebSocket collectors publish queue depth, high-water marks, frame and byte
+counters, and enqueue/dequeue totals every few seconds. CubingChina publishes the
+same telemetry per competition socket as well as an aggregate.
 
 ## Notification idempotency
 
@@ -126,3 +129,9 @@ The production blueprint runs `run_classification_worker` as its own worker. The
 ingestion-status endpoint exposes pending/claimed/failed scope counts, oldest fact
 lag, and recent classification duration. `ClassificationScopeWork` is also visible
 in Django admin for diagnosis and recovery.
+
+The read-only operations dashboard is served at `/debug`. It polls the ingestion
+status endpoint, keeps a short queue history in the browser for rate and trend
+visualization, and includes WebSocket, classification, notification-outbox, and
+reconciliation health. It exposes summaries only: no provider payloads, Web Push
+subscription data, credentials, process identifiers, or traceback bodies.

@@ -86,7 +86,10 @@ def test_multiplexes_rounds_and_routes_full_snapshot_payloads():
         assert counters["reply_frames"] == 3
         assert counters["subscription_data_frames"] == 1
         assert counters["subscription_messages_queued"] == 1
+        assert counters["subscription_messages_dequeued"] == 1
         assert counters["unexpected_frames"] == 0
+        assert client.websocket_diagnostics["peak_message_queue_size"] == 1
+        assert client.websocket_diagnostics["queue_capacity"] is None
         await client.close()
         assert socket.closed
 

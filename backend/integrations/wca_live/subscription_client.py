@@ -3,6 +3,7 @@ import contextlib
 import json
 import logging
 from collections import Counter
+from datetime import UTC, datetime
 from itertools import count
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -19,6 +20,7 @@ FRAME_COUNTER_KEYS = (
     "heartbeat_replies",
     "subscription_data_frames",
     "subscription_messages_queued",
+    "subscription_messages_dequeued",
     "subscription_error_frames",
     "unknown_subscription_ids",
     "unexpected_frames",
@@ -53,6 +55,7 @@ class WCALiveSubscriptionClient:
         self._subscription_to_round = {}
         self._round_to_subscription = {}
         self._frame_counters = Counter({key: 0 for key in FRAME_COUNTER_KEYS})
+        self._peak_message_queue_size = 0
         self._last_frame = None
         self._last_unexpected_frame = None
 
@@ -80,6 +83,9 @@ class WCALiveSubscriptionClient:
         return {
             "counters": dict(self._frame_counters),
             "message_queue_size": self._messages.qsize(),
+            "peak_message_queue_size": self._peak_message_queue_size,
+            "queue_capacity": None,
+            "captured_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "last_frame": self._last_frame,
             "last_unexpected_frame": self._last_unexpected_frame,
         }
@@ -163,7 +169,14 @@ class WCALiveSubscriptionClient:
         message = await self._messages.get()
         if isinstance(message, Exception):
             raise message
+        self._frame_counters["subscription_messages_dequeued"] += 1
         return message
+
+    async def _queue_message(self, message) -> None:
+        await self._messages.put(message)
+        self._peak_message_queue_size = max(
+            self._peak_message_queue_size, self._messages.qsize()
+        )
 
     async def _send_and_wait(self, join_ref, ref, topic, event, payload) -> dict:
         if self._socket is None:
@@ -302,7 +315,7 @@ class WCALiveSubscriptionClient:
                         )
                         continue
                     self._frame_counters["subscription_messages_queued"] += 1
-                    await self._messages.put((round_id, result.get("data", result)))
+                    await self._queue_message((round_id, result.get("data", result)))
                 else:
                     self._frame_counters["unexpected_frames"] += 1
                     self._last_unexpected_frame = {
@@ -329,7 +342,7 @@ class WCALiveSubscriptionClient:
             for future in self._pending.values():
                 if not future.done():
                     future.set_exception(error)
-            await self._messages.put(error)
+            await self._queue_message(error)
 
     async def _heartbeat_loop(self) -> None:
         try:
@@ -344,7 +357,9 @@ class WCALiveSubscriptionClient:
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 - surface any heartbeat transport failure.
-            await self._messages.put(WCALiveIntegrationError(f"WCA Live heartbeat failed: {exc}"))
+            await self._queue_message(
+                WCALiveIntegrationError(f"WCA Live heartbeat failed: {exc}")
+            )
 
     async def close(self) -> None:
         if self._heartbeat_task:

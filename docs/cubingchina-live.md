@@ -68,6 +68,7 @@ classified against an obsolete pre-competition baseline.
 | `CUBINGCHINA_RETRY_BASE_SECONDS` | `1` | Reconnect backoff base |
 | `CUBINGCHINA_RETRY_MAX_SECONDS` | `60` | Reconnect backoff ceiling |
 | `CUBINGCHINA_KEEPALIVE_SECONDS` | `55` | Idle interval before JSON ping |
+| `WORKER_TELEMETRY_INTERVAL_SECONDS` | `5` | Queue-diagnostic persistence interval |
 | `WCA_PUBLIC_BASE_URL` | `https://www.worldcubeassociation.org` | Official records API origin |
 
 Run locally with:
@@ -88,5 +89,6 @@ curl 'http://localhost:8000/api/ingestion-status/'
 The health payload reports worker state and heartbeat, connected/target/pending competition
 counts, target round count, connection/message/discovery/snapshot timestamps, observation count,
 and the latest error. `metadata.competitions` includes each active target's connection state,
-last message/snapshot times, and its own error so one broken competition remains visible without
-making healthy collectors appear failed.
+queue depth, high-water mark, frame counters, last message/snapshot times, and its own error so one
+broken competition remains visible without making healthy collectors appear failed. The same
+information is visualized at `https://cubingnow.com/debug`.

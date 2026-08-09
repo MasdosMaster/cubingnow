@@ -9,11 +9,12 @@ import App from "./App";
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.history.replaceState({}, "", "/");
 });
 
 
 describe("homepage", () => {
-  it("renders canonical achievement tables and keeps source monitoring available", async () => {
+  it("renders canonical achievement tables and links to the debug dashboard", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url) => {
       if (url.includes("ingestion-status")) {
         return { ok: true, json: async () => ({}) };
@@ -43,13 +44,10 @@ describe("homepage", () => {
         "Continental records",
         "National records",
         "Personal records",
-        "Source observations — WCA Live GraphQL",
-        "Source observations — WCA Live API",
-        "Source observations — CubingChina",
         "Competing this weekend"
       ]);
     });
-    expect(screen.getByText("Source monitoring and provider claims")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Debug" }).getAttribute("href")).toBe("/debug");
   });
 
   it("uses the newly backend-ranked payload when a continent filter changes", async () => {

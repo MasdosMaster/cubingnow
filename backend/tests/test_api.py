@@ -5,7 +5,11 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.records.models import RecentRecordObservation
+from apps.records.models import (
+    CubingChinaCompetitionTarget,
+    IngestionWorkerStatus,
+    RecentRecordObservation,
+)
 from integrations.wca_live.ingestion import persist_record_candidate
 from integrations.wca_live.schemas import RecordCandidate
 
@@ -120,3 +124,58 @@ def test_ingestion_status_is_available_before_workers_start():
     assert response.status_code == 200
     assert response.json()["api_polling"]["status"] == "unknown"
     assert response.json()["graphql_subscription"]["status"] == "unknown"
+    assert response.json()["websocket_queues"]["wca_live"]["message_queue_size"] == 0
+    assert response.json()["notifications"]["queued_count"] == 0
+    assert response.json()["record_pipeline"]["canonical_result_count"] == 0
+
+
+@pytest.mark.django_db
+def test_ingestion_status_aggregates_live_websocket_queues():
+    now = timezone.now()
+    IngestionWorkerStatus.objects.create(
+        ingestion_method=RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION,
+        is_running=True,
+        connected=True,
+        heartbeat_at=now,
+        metadata={
+            "websocket": {
+                "message_queue_size": 3,
+                "peak_message_queue_size": 8,
+                "queue_capacity": None,
+                "captured_at": now.isoformat(),
+                "counters": {"frames_received": 21},
+            }
+        },
+    )
+    IngestionWorkerStatus.objects.create(
+        ingestion_method=RecentRecordObservation.IngestionMethod.CUBINGCHINA_WEBSOCKET,
+        is_running=True,
+        connected=True,
+        heartbeat_at=now,
+    )
+    for index, queue_size in enumerate((2, 5), start=1):
+        CubingChinaCompetitionTarget.objects.create(
+            slug=f"competition-{index}",
+            cubingchina_id=index,
+            wca_competition_id=f"TestOpen{index}",
+            competition_name=f"Test Open {index}",
+            competition_start_date=now.date(),
+            competition_end_date=now.date(),
+            status=CubingChinaCompetitionTarget.Status.ACTIVE,
+            active=True,
+            connected=True,
+            websocket_diagnostics={
+                "message_queue_size": queue_size,
+                "peak_message_queue_size": queue_size + 2,
+                "captured_at": now.isoformat(),
+                "counters": {"frames_received": queue_size * 10},
+            },
+        )
+
+    payload = APIClient().get("/api/ingestion-status/").json()
+
+    assert payload["websocket_queues"]["wca_live"]["message_queue_size"] == 3
+    assert payload["websocket_queues"]["cubingchina"]["message_queue_size"] == 7
+    assert payload["websocket_queues"]["cubingchina"]["peak_message_queue_size"] == 7
+    assert payload["websocket_queues"]["cubingchina"]["counters"]["frames_received"] == 70
+    assert payload["cubingchina_websocket"]["metadata"]["competitions"][0]["websocket"]
