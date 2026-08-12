@@ -10,8 +10,8 @@ is calculated in `ATTENDANCE_WINDOW_TIME_ZONE`, which defaults to `Europe/Amster
 as-of date of 2026-08-05 the window is 2026-08-05 through 2026-08-11. A competition is included
 when its date range overlaps this window at either edge.
 
-The fixed `WCA_WEEKEND_START` and `WCA_WEEKEND_END` settings belong to the separate WCA Live
-verification experiment and are not used by attendance synchronization.
+The WCA Live verification worker uses the same rolling window by default. Its optional
+`WCA_WEEKEND_START` and `WCA_WEEKEND_END` overrides are not used by attendance synchronization.
 
 ## Sources and synchronization
 

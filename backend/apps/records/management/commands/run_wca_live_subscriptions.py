@@ -1,6 +1,5 @@
 import asyncio
 import os
-from datetime import date
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -8,6 +7,7 @@ from django.utils import timezone
 
 from apps.records.models import IngestionRun, IngestionWorkerStatus, RecentRecordObservation
 from integrations.wca_live.subscription_supervisor import SubscriptionSupervisor
+from integrations.weekend_window import resolve_weekend_window
 
 METHOD = RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION
 
@@ -36,12 +36,15 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         try:
-            weekend_start = date.fromisoformat(options["start"])
-            weekend_end = date.fromisoformat(options["end"])
+            weekend_start, weekend_end = resolve_weekend_window(
+                options["start"],
+                options["end"],
+                timezone_name=settings.WCA_WEEKEND_TIME_ZONE,
+            )
         except ValueError as exc:
-            raise CommandError("--start and --end must be ISO dates (YYYY-MM-DD)") from exc
-        if weekend_end < weekend_start:
-            raise CommandError("--end must be on or after --start")
+            raise CommandError(
+                "--start and --end must both be ISO dates (YYYY-MM-DD), with end on or after start"
+            ) from exc
 
         now = timezone.now()
         IngestionWorkerStatus.objects.update_or_create(

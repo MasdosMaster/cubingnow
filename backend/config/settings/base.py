@@ -109,8 +109,8 @@ WEB_PUSH_REQUEST_TIMEOUT_SECONDS = float(
     os.getenv("WEB_PUSH_REQUEST_TIMEOUT_SECONDS", "10")
 )
 
-# WCA Live observational record-ingestion experiment. Dates are deliberately
-# centralized here and can be overridden without changing code or containers.
+# WCA Live observational record-ingestion experiment. The subscription window
+# rolls from Wednesday through Tuesday unless both date overrides are supplied.
 WCA_LIVE_API_URL = os.getenv(
     "WCA_LIVE_API_URL",
     os.getenv("WCA_LIVE_GRAPHQL_URL", "https://live.worldcubeassociation.org/api"),
@@ -118,8 +118,9 @@ WCA_LIVE_API_URL = os.getenv(
 WCA_LIVE_WS_URL = os.getenv(
     "WCA_LIVE_WS_URL", "wss://live.worldcubeassociation.org/socket/websocket"
 )
-WCA_WEEKEND_START = os.getenv("WCA_WEEKEND_START", "2026-08-06")
-WCA_WEEKEND_END = os.getenv("WCA_WEEKEND_END", "2026-08-10")
+WCA_WEEKEND_START = os.getenv("WCA_WEEKEND_START", "")
+WCA_WEEKEND_END = os.getenv("WCA_WEEKEND_END", "")
+WCA_WEEKEND_TIME_ZONE = os.getenv("WCA_WEEKEND_TIME_ZONE", "Europe/Amsterdam")
 WCA_COMPETITION_LOOKBACK_DAYS = int(os.getenv("WCA_COMPETITION_LOOKBACK_DAYS", "7"))
 WCA_API_POLL_INTERVAL_SECONDS = int(os.getenv("WCA_API_POLL_INTERVAL_SECONDS", "60"))
 WCA_ROUND_DISCOVERY_INTERVAL_SECONDS = int(

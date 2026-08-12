@@ -13,6 +13,7 @@ from apps.notifications.models import (
     NotificationEndpoint,
     NotificationEvent,
 )
+from integrations.weekend_window import resolve_weekend_window
 
 from .models import (
     Achievement,
@@ -240,6 +241,11 @@ def _record_pipeline_health() -> dict:
 def ingestion_status(request):
     started_at = perf_counter()
     now = timezone.now()
+    weekend_start, weekend_end = resolve_weekend_window(
+        settings.WCA_WEEKEND_START,
+        settings.WCA_WEEKEND_END,
+        timezone_name=settings.WCA_WEEKEND_TIME_ZONE,
+    )
     classification_pending = ClassificationScopeWork.objects.filter(
         requested_version__gt=F("processed_version")
     )
@@ -380,8 +386,8 @@ def ingestion_status(request):
         "record_pipeline": _record_pipeline_health(),
         "subscription_rounds": round_counts,
         "configuration": {
-            "weekend_start": settings.WCA_WEEKEND_START,
-            "weekend_end": settings.WCA_WEEKEND_END,
+            "weekend_start": weekend_start.isoformat(),
+            "weekend_end": weekend_end.isoformat(),
             "lookback_days": settings.WCA_COMPETITION_LOOKBACK_DAYS,
             "catchup_minutes": settings.WCA_SUBSCRIPTION_CATCHUP_MINUTES,
             "telemetry_interval_seconds": settings.WORKER_TELEMETRY_INTERVAL_SECONDS,

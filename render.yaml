@@ -81,10 +81,8 @@ services:
           property: connectionString
       - key: DJANGO_ALLOWED_HOSTS
         value: api.cubingnow.com
-      - key: WCA_WEEKEND_START
-        value: 2026-08-06
-      - key: WCA_WEEKEND_END
-        value: 2026-08-10
+      - key: WCA_WEEKEND_TIME_ZONE
+        value: Europe/Amsterdam
       - key: WCA_COMPETITION_LOOKBACK_DAYS
         value: "7"
       - key: WCA_ROUND_DISCOVERY_INTERVAL_SECONDS

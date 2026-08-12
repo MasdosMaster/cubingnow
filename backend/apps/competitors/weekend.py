@@ -1,8 +1,7 @@
 import logging
 import unicodedata
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
+from datetime import date, datetime
 
 from django.conf import settings
 from django.db import transaction
@@ -23,6 +22,7 @@ from integrations.cubingchina.scraper_client import CubingChinaScraperClient
 from integrations.wca.attendance_parser import parse_competitions as parse_wca_competitions
 from integrations.wca.attendance_parser import parse_registrations as parse_wca_registrations
 from integrations.wca.scraper_client import WCAScraperClient
+from integrations.weekend_window import rolling_weekend_window
 
 from .models import Attendance, AttendanceSyncRun, Competitor
 
@@ -33,17 +33,10 @@ def attendance_window(
     as_of: date | datetime | None = None,
     timezone_name: str | None = None,
 ) -> tuple[date, date]:
-    zone = ZoneInfo(timezone_name or settings.ATTENDANCE_WINDOW_TIME_ZONE)
-    if as_of is None:
-        local_date = datetime.now(zone).date()
-    elif isinstance(as_of, datetime):
-        if as_of.tzinfo is None:
-            as_of = as_of.replace(tzinfo=zone)
-        local_date = as_of.astimezone(zone).date()
-    else:
-        local_date = as_of
-    start = local_date - timedelta(days=(local_date.weekday() - 2) % 7)
-    return start, start + timedelta(days=6)
+    return rolling_weekend_window(
+        as_of,
+        timezone_name or settings.ATTENDANCE_WINDOW_TIME_ZONE,
+    )
 
 
 def alphabetical_key(name: str) -> str:

@@ -41,8 +41,9 @@ All defaults live in `config/settings/base.py` and can be overridden with enviro
 | --- | --- | --- |
 | `WCA_LIVE_API_URL` | `https://live.worldcubeassociation.org/api` | GraphQL HTTP endpoint |
 | `WCA_LIVE_WS_URL` | `wss://live.worldcubeassociation.org/socket/websocket` | Phoenix WebSocket endpoint |
-| `WCA_WEEKEND_START` | `2026-08-06` | Inclusive target start date |
-| `WCA_WEEKEND_END` | `2026-08-10` | Inclusive target end date |
+| `WCA_WEEKEND_START` | empty | Optional fixed inclusive start-date override |
+| `WCA_WEEKEND_END` | empty | Optional fixed inclusive end-date override |
+| `WCA_WEEKEND_TIME_ZONE` | `Europe/Amsterdam` | Time zone used for the rolling Wednesday-through-Tuesday window |
 | `WCA_COMPETITION_LOOKBACK_DAYS` | `7` | Days subtracted from the start for discovery |
 | `WCA_API_POLL_INTERVAL_SECONDS` | `60` | API polling interval |
 | `WCA_ROUND_DISCOVERY_INTERVAL_SECONDS` | `900` | Subscription rediscovery interval |
@@ -51,6 +52,11 @@ All defaults live in `config/settings/base.py` and can be overridden with enviro
 | `WCA_RETRY_MAX_SECONDS` | `60` | Retry backoff ceiling |
 | `WCA_RETRY_MAX_ATTEMPTS` | `5` | Attempts within one API poll cycle |
 | `CUBINGNOW_LOG_LEVEL` | `INFO` | Worker integration log level |
+
+With no date overrides, the subscription worker calculates the current Wednesday-through-Tuesday
+window when it starts. At the end of Tuesday the process exits normally; Render restarts it and
+the next process calculates the new window. `WCA_WEEKEND_START` and `WCA_WEEKEND_END` must be set
+together when a fixed window is required.
 
 The subscription command's `--start`, `--end`, `--lookback-days`, `--discovery-interval`, and
 `--catchup-minutes` arguments override these settings for one worker invocation.
@@ -103,6 +109,8 @@ cd backend
 uv run python manage.py run_wca_live_subscriptions \
   --start 2026-08-06 --end 2026-08-10
 ```
+
+Omit `--start` and `--end` for the normal rolling production window.
 
 `sync_recent_records` remains the one-off API reconciliation command. `collect_wca_live` remains
 as a compatibility alias for the supervised subscription command.
