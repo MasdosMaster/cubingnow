@@ -1,8 +1,11 @@
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
+from importlib import import_module
 
 import pytest
+from django.apps import apps as django_apps
 from django.core.management import call_command
+from rest_framework.test import APIClient
 
 from apps.notifications.models import (
     NotificationDelivery,
@@ -11,6 +14,7 @@ from apps.notifications.models import (
     NotificationProvider,
     NotificationType,
 )
+from apps.notifications.services import publish_achievement_notification
 from apps.records.classification import reclassify_scope
 from apps.records.classification_work import (
     mark_classification_scopes_dirty,
@@ -159,6 +163,198 @@ def test_provider_neutral_natural_identity_reconciles_cubingchina_and_wca_live()
         "wca_live",
     }
     assert Achievement.objects.get(result=result, type="WR").qualification.show_on_homepage
+
+
+@pytest.mark.django_db
+def test_finalized_result_retires_legacy_projection_and_reuses_its_notification():
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    old_observation = reconcile_result_observation(
+        observed(
+            method="api_polling",
+            source="wca_live",
+            source_result="legacy-result",
+            value=390,
+            claim="WR",
+        )
+    )
+    old_result = old_observation.canonical_result
+    old_result.identity_key += "|attempt:3"
+    old_result.attempt_number = 3
+    old_result.save(update_fields=["identity_key", "attempt_number", "updated_at"])
+    old_observation.attempt_number = 3
+    old_observation.save(update_fields=["attempt_number", "updated_at"])
+    old_achievement = Achievement.objects.get(result=old_result, type="WR")
+
+    endpoint = NotificationEndpoint()
+    endpoint.issue_management_token()
+    endpoint.save()
+    old_event = NotificationEvent.objects.create(
+        notification_type=NotificationType.RECORD_WR,
+        deduplication_key=f"record:achievement:{old_result.identity_key}|WR",
+        payload={
+            "record_level": "WR",
+            "event_id": "333",
+            "kind": "single",
+            "formatted_result": "3.90",
+            "competitor_name": "Test Cuber",
+            "competition_name": "Test Open 2026",
+        },
+        target_url="/",
+        occurred_at=old_result.first_observed_at,
+        achievement=old_achievement,
+    )
+    delivery = NotificationDelivery.objects.create(
+        event=old_event,
+        endpoint=endpoint,
+        provider=NotificationProvider.WEBPUSH,
+        status=NotificationDelivery.Status.RETRY,
+    )
+
+    final_observation = reconcile_result_observation(
+        observed(
+            method="api_polling",
+            source="wca_live",
+            source_result="final-result",
+            value=390,
+            claim="WR",
+            observed_at=old_result.first_observed_at + timedelta(minutes=1),
+        )
+    )
+    final_result = final_observation.canonical_result
+    final_achievement = Achievement.objects.get(result=final_result, type="WR")
+
+    old_achievement.refresh_from_db()
+    old_achievement.qualification.refresh_from_db()
+    assert old_achievement.status == Achievement.Status.WITHDRAWN
+    assert old_achievement.qualification.show_on_homepage is False
+    assert old_achievement.qualification.notification_eligible is False
+
+    # Even if stale projection flags survive a partial rollout, the public API
+    # still prefers the finalized fact and cannot show the duplicate.
+    old_achievement.status = Achievement.Status.ACTIVE
+    old_achievement.save(update_fields=["status", "updated_at"])
+    old_achievement.qualification.show_on_homepage = True
+    old_achievement.qualification.save(
+        update_fields=["show_on_homepage", "updated_at"]
+    )
+    response = APIClient().get("/api/records/?level=WR")
+    assert response.status_code == 200
+    assert response.data["count"] == 1
+    assert response.data["results"][0]["canonical_result_id"] == final_result.pk
+
+    event, created = publish_achievement_notification(final_achievement)
+
+    assert event == old_event
+    assert created is False
+    assert NotificationEvent.objects.count() == 1
+    old_event.refresh_from_db()
+    delivery.refresh_from_db()
+    assert old_event.achievement_id == final_achievement.pk
+    assert delivery.status == NotificationDelivery.Status.CANCELLED
+    assert delivery.last_error_code == "finalized_identity_cutover"
+
+
+@pytest.mark.django_db
+def test_recovery_migration_retires_duplicates_and_cancels_the_existing_queue():
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    legacy_observation = reconcile_result_observation(
+        observed(
+            method="api_polling",
+            source="wca_live",
+            source_result="migration-legacy-result",
+            value=390,
+            claim="WR",
+        )
+    )
+    legacy_result = legacy_observation.canonical_result
+    legacy_result.identity_key += "|attempt:3"
+    legacy_result.attempt_number = 3
+    legacy_result.save(update_fields=["identity_key", "attempt_number", "updated_at"])
+    legacy_observation.attempt_number = 3
+    legacy_observation.save(update_fields=["attempt_number", "updated_at"])
+    legacy_achievement = Achievement.objects.get(result=legacy_result, type="WR")
+
+    final_observation = reconcile_result_observation(
+        observed(
+            method="api_polling",
+            source="wca_live",
+            source_result="migration-final-result",
+            value=390,
+            claim="WR",
+            observed_at=legacy_result.first_observed_at + timedelta(minutes=1),
+        )
+    )
+    final_achievement = Achievement.objects.get(
+        result=final_observation.canonical_result,
+        type="WR",
+    )
+
+    legacy_achievement.status = Achievement.Status.ACTIVE
+    legacy_achievement.save(update_fields=["status", "updated_at"])
+    legacy_achievement.qualification.show_on_homepage = True
+    legacy_achievement.qualification.notification_eligible = True
+    legacy_achievement.qualification.save(
+        update_fields=["show_on_homepage", "notification_eligible", "updated_at"]
+    )
+
+    old_event = NotificationEvent.objects.create(
+        notification_type=NotificationType.RECORD_WR,
+        deduplication_key=f"record:achievement:{legacy_result.identity_key}|WR",
+        payload={},
+        target_url="/",
+        occurred_at=legacy_result.first_observed_at,
+        achievement=legacy_achievement,
+    )
+    current_event = NotificationEvent.objects.create(
+        notification_type=NotificationType.RECORD_WR,
+        deduplication_key=(
+            f"record:achievement:{final_observation.canonical_result.identity_key}|WR"
+        ),
+        payload={},
+        target_url="/",
+        occurred_at=final_observation.canonical_result.first_observed_at,
+        achievement=final_achievement,
+    )
+
+    def queued_delivery(event, status):
+        item = NotificationEndpoint()
+        item.issue_management_token()
+        item.save()
+        return NotificationDelivery.objects.create(
+            event=event,
+            endpoint=item,
+            provider=NotificationProvider.WEBPUSH,
+            status=status,
+        )
+
+    pending = queued_delivery(old_event, NotificationDelivery.Status.PENDING)
+    retry = queued_delivery(current_event, NotificationDelivery.Status.RETRY)
+    sent = queued_delivery(old_event, NotificationDelivery.Status.SENT)
+
+    migration = import_module(
+        "apps.records.migrations.0012_retire_superseded_attempt_results"
+    )
+    migration.retire_superseded_attempt_results(django_apps, None)
+
+    legacy_result.refresh_from_db()
+    legacy_observation.refresh_from_db()
+    legacy_achievement.refresh_from_db()
+    legacy_achievement.qualification.refresh_from_db()
+    pending.refresh_from_db()
+    retry.refresh_from_db()
+    sent.refresh_from_db()
+    assert legacy_result.status == CanonicalResult.Status.RETRACTED
+    assert legacy_observation.status == ResultObservation.Status.RETRACTED
+    assert legacy_achievement.status == Achievement.Status.WITHDRAWN
+    assert legacy_achievement.qualification.show_on_homepage is False
+    assert legacy_achievement.qualification.notification_eligible is False
+    assert pending.status == NotificationDelivery.Status.CANCELLED
+    assert retry.status == NotificationDelivery.Status.CANCELLED
+    assert sent.status == NotificationDelivery.Status.SENT
 
 
 @pytest.mark.django_db

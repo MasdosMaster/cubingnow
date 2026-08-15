@@ -134,11 +134,21 @@ python manage.py backfill_finalized_results
 python manage.py backfill_finalized_results --apply
 ```
 
+Migration `records.0012_retire_superseded_attempt_results` is the non-destructive
+production recovery boundary. It cancels every non-terminal delivery that predates
+the cutover and withdraws a legacy attempt/aggregate projection when the matching
+finalized result already exists. The public projection and classifier apply the same
+preference dynamically, so a partial or rolling deploy cannot show both generations.
+Notification publication also resolves an old attempt-level event for the same
+finalized value as historical and never creates replacement deliveries for it.
+
 The backfill preserves raw observations, provider states, baselines, and sent
 notification events; it rebuilds derived observations, canonical facts, validations,
 achievements, and qualifications. Reclassification suppresses notification
 publication, and pending/retry/processing deliveries tied to obsolete achievements
-are cancelled. The legacy nullable `attempt_number` columns remain temporarily for
+are cancelled. In recovery mode all other non-terminal deliveries are cancelled too,
+so nothing queued before the identity rebuild can be released afterward. The legacy
+nullable `attempt_number` columns remain temporarily for
 rollback safety and always receive null from the final-only pipeline.
 
 Deferred work is deliberately limited to external-data and product concerns:

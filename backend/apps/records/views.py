@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from time import perf_counter
 
 from django.conf import settings
-from django.db.models import Count, F, Max, Min, OuterRef, Q, Subquery
+from django.db.models import Count, Exists, F, Max, Min, OuterRef, Q, Subquery
 from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -36,12 +36,40 @@ class RecordViewSet(ReadOnlyModelViewSet):
     serializer_class = AchievementSerializer
 
     def get_queryset(self):
+        legacy_identity = Q(result__identity_key__contains="|attempt:") | Q(
+            result__identity_key__endswith="|aggregate"
+        )
+        finalized_counterpart = (
+            CanonicalResult.objects.filter(
+                wca_competition_id=OuterRef("result__wca_competition_id"),
+                competitor_wca_id=OuterRef("result__competitor_wca_id"),
+                event_id=OuterRef("result__event_id"),
+                round_number=OuterRef("result__round_number"),
+                kind=OuterRef("result__kind"),
+                status__in=[
+                    CanonicalResult.Status.ACTIVE,
+                    CanonicalResult.Status.CORRECTED,
+                ],
+            )
+            .exclude(
+                Q(identity_key__contains="|attempt:")
+                | Q(identity_key__endswith="|aggregate")
+            )
+        )
         queryset = (
             Achievement.objects.select_related("result", "qualification")
             .prefetch_related("result__observations")
             .filter(
                 status=Achievement.Status.ACTIVE,
                 qualification__show_on_homepage=True,
+            )
+            .annotate(_has_finalized_counterpart=Exists(finalized_counterpart))
+            .exclude(
+                legacy_identity
+                & Q(_has_finalized_counterpart=True)
+                & ~Q(result__wca_competition_id="")
+                & ~Q(result__competitor_wca_id="")
+                & Q(result__round_number__isnull=False)
             )
         )
         level = self.request.query_params.get("level")

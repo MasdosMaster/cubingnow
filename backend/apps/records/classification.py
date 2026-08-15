@@ -3,6 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from django.db import transaction
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from integrations.wca_live.result_values import is_better, is_complete
@@ -70,6 +71,44 @@ def _set_if_changed(instance, field: str, value) -> bool:
         return False
     setattr(instance, field, value)
     return True
+
+
+def _preferred_scope_results(event_id: str, kind: str):
+    """Exclude legacy attempt projections once their finalized fact exists."""
+
+    legacy_identity = Q(identity_key__contains="|attempt:") | Q(
+        identity_key__endswith="|aggregate"
+    )
+    finalized_counterpart = (
+        CanonicalResult.objects.filter(
+            wca_competition_id=OuterRef("wca_competition_id"),
+            competitor_wca_id=OuterRef("competitor_wca_id"),
+            event_id=OuterRef("event_id"),
+            round_number=OuterRef("round_number"),
+            kind=OuterRef("kind"),
+            status__in=[
+                CanonicalResult.Status.ACTIVE,
+                CanonicalResult.Status.CORRECTED,
+            ],
+        )
+        .exclude(legacy_identity)
+        .exclude(pk=OuterRef("pk"))
+    )
+    return (
+        CanonicalResult.objects.filter(
+            event_id=event_id,
+            kind=kind,
+            status__in=[CanonicalResult.Status.ACTIVE, CanonicalResult.Status.CORRECTED],
+        )
+        .annotate(_has_finalized_counterpart=Exists(finalized_counterpart))
+        .exclude(
+            legacy_identity
+            & Q(_has_finalized_counterpart=True)
+            & ~Q(wca_competition_id="")
+            & ~Q(competitor_wca_id="")
+            & Q(round_number__isnull=False)
+        )
+    )
 
 
 def _persist_achievements(
@@ -275,11 +314,9 @@ def reclassify_scope(
     )
     ResultIdentityScope.objects.select_for_update().get(pk=lock.pk)
     results = list(
-        CanonicalResult.objects.filter(
-            event_id=event_id,
-            kind=kind,
-            status__in=[CanonicalResult.Status.ACTIVE, CanonicalResult.Status.CORRECTED],
-        ).prefetch_related("observations", "record_validations")
+        _preferred_scope_results(event_id, kind).prefetch_related(
+            "observations", "record_validations"
+        )
     )
     results.sort(key=lambda result: (_result_time(result), result.pk))
     now = timezone.now()

@@ -204,7 +204,18 @@ class CanonicalResult(models.Model):
             models.Index(
                 fields=["event_id", "kind", "status"],
                 name="canonical_result_scope_idx",
-            )
+            ),
+            models.Index(
+                fields=[
+                    "wca_competition_id",
+                    "competitor_wca_id",
+                    "event_id",
+                    "round_number",
+                    "kind",
+                    "status",
+                ],
+                name="canonical_family_status_idx",
+            ),
         ]
 
 

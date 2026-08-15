@@ -209,6 +209,40 @@ def publish_achievement_notification(achievement):
         return None, False
 
     result = achievement.result
+    if "|attempt:" in result.identity_key or result.identity_key.endswith("|aggregate"):
+        logger.info(
+            "legacy_achievement_notification_suppressed achievement_id=%s canonical_result_id=%s",
+            achievement.pk,
+            result.pk,
+        )
+        return None, False
+
+    historical_event = _historical_achievement_event(achievement)
+    if historical_event is not None:
+        cancelled = historical_event.deliveries.filter(
+            status__in=[
+                NotificationDelivery.Status.PENDING,
+                NotificationDelivery.Status.PROCESSING,
+                NotificationDelivery.Status.RETRY,
+            ]
+        ).update(
+            status=NotificationDelivery.Status.CANCELLED,
+            claimed_by="",
+            next_attempt_at=None,
+            last_error_code="finalized_identity_cutover",
+            last_error_message="Historical achievement was reconciled to a finalized result",
+            updated_at=timezone.now(),
+        )
+        _attach_achievement_event(historical_event, achievement)
+        logger.info(
+            "historical_achievement_notification_reused event_id=%s achievement_id=%s "
+            "deliveries_cancelled=%d",
+            historical_event.pk,
+            achievement.pk,
+            cancelled,
+        )
+        return historical_event, False
+
     proxy = SimpleNamespace(
         pk=None,
         canonical_key=f"achievement:{result.identity_key}|{achievement.type}",
@@ -225,6 +259,78 @@ def publish_achievement_notification(achievement):
         source_payload={},
     )
     event, created = publish_record_notification(proxy)
+    _attach_achievement_event(event, achievement)
+    return event, created
+
+
+def _achievement_identity_family(result) -> str:
+    if result.wca_competition_id and result.competitor_wca_id and result.round_number is not None:
+        return "|".join(
+            [
+                "wca",
+                result.wca_competition_id.upper(),
+                result.competitor_wca_id.upper(),
+                result.event_id,
+                str(result.round_number),
+                result.kind,
+            ]
+        )
+    identity = result.identity_key
+    if identity.endswith(("|aggregate", "|final")):
+        return identity.rsplit("|", 1)[0]
+    if "|attempt:" in identity:
+        return identity.rsplit("|attempt:", 1)[0]
+    return identity
+
+
+def _historical_achievement_event(achievement):
+    """Find the pre-finalization event for the same achievement, if it exists.
+
+    Attempt-level identities included ``|attempt:N`` (or ``|aggregate``) in
+    their event key. Finalized identities deliberately omit that slot, so an
+    exact-key lookup alone would treat the same already-sent alert as new.
+    """
+
+    result = achievement.result
+    notification_type = LEVEL_TO_NOTIFICATION_TYPE[achievement.type]
+    desired_key = f"record:achievement:{result.identity_key}|{achievement.type}"
+    if NotificationEvent.objects.filter(deduplication_key=desired_key).exists():
+        return None
+    family = _achievement_identity_family(result)
+    candidates = NotificationEvent.objects.filter(
+        notification_type=notification_type,
+        deduplication_key__startswith=f"record:achievement:{family}|",
+        deduplication_key__endswith=f"|{achievement.type}",
+        payload__record_level=achievement.type,
+        payload__event_id=result.event_id,
+        payload__kind=result.kind,
+        payload__formatted_result=result.formatted_result,
+    ).exclude(deduplication_key=desired_key)
+    event = candidates.order_by("created_at").first()
+    if event is not None:
+        return event
+
+    # Source-only identities do not always retain a provider-neutral family in
+    # their legacy key. The payload fields are the durable audit data shared by
+    # both generations of the same alert.
+    return (
+        NotificationEvent.objects.filter(
+            notification_type=notification_type,
+            payload__record_level=achievement.type,
+            payload__event_id=result.event_id,
+            payload__kind=result.kind,
+            payload__formatted_result=result.formatted_result,
+            payload__competitor_name=result.competitor_name,
+            payload__competition_name=result.competition_name,
+        )
+        .exclude(deduplication_key=desired_key)
+        .order_by("created_at")
+        .first()
+    )
+
+
+def _attach_achievement_event(event, achievement) -> None:
+    result = achievement.result
     updates = []
     if event.achievement_id != achievement.pk:
         event.achievement = achievement
@@ -235,7 +341,6 @@ def publish_achievement_notification(achievement):
         updates.append("source_record")
     if updates:
         event.save(update_fields=updates)
-    return event, created
 
 
 def publish_achievements_after_commit(achievement_ids) -> None:

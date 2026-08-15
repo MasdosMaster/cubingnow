@@ -4,10 +4,9 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from apps.notifications.models import NotificationDelivery, NotificationEvent
+from apps.notifications.models import NotificationDelivery
 from apps.records.classification import reclassify_scope
 from apps.records.models import (
-    Achievement,
     CanonicalResult,
     ClassificationScopeWork,
     CubingChinaResultState,
@@ -116,14 +115,10 @@ class Command(BaseCommand):
             )
 
         with transaction.atomic():
-            old_achievement_ids = list(Achievement.objects.values_list("pk", flat=True))
-            obsolete_event_ids = list(
-                NotificationEvent.objects.filter(
-                    achievement_id__in=old_achievement_ids
-                ).values_list("pk", flat=True)
-            )
+            # No delivery that predates this recovery may be sent after derived
+            # identities are rebuilt. Sent and terminal deliveries remain as
+            # immutable audit history; every non-terminal delivery is cancelled.
             cancelled = NotificationDelivery.objects.filter(
-                event_id__in=obsolete_event_ids,
                 status__in=[
                     NotificationDelivery.Status.PENDING,
                     NotificationDelivery.Status.PROCESSING,
