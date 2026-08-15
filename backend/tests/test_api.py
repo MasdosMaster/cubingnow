@@ -28,6 +28,7 @@ def test_records_endpoint_returns_normalized_record():
     result = response.json()["results"][0]
     assert result["formatted_result"] == "3.26"
     assert result["record_level"] == "WR"
+    assert result["continent"] == "Europe"
     assert result["validation_status"] == "verified"
 
 

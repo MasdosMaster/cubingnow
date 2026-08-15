@@ -18,6 +18,20 @@ const LABELS = {
   PR: "Personal records",
 };
 
+const CONTINENTAL_RECORD_LABELS = {
+  Africa: "AfR",
+  Asia: "AsR",
+  Europe: "ER",
+  "North America": "NAR",
+  "South America": "SAR",
+  Oceania: "OcR",
+};
+
+function recordLevelLabel(record) {
+  if (record.record_level !== "CR") return record.record_level;
+  return CONTINENTAL_RECORD_LABELS[record.continent] || record.record_level;
+}
+
 export function AchievementList({ level, records, loading, error }) {
   const title = LABELS[level] || `${level} results`;
   return (
@@ -39,7 +53,7 @@ export function AchievementList({ level, records, loading, error }) {
               </div>
               {records.map((record) => (
                 <article className="record-row" role="row" key={record.id}>
-                  <span className={`level level-${record.record_level.toLowerCase()}`}>{record.record_level}</span>
+                  <span className={`level level-${record.record_level.toLowerCase()}`}>{recordLevelLabel(record)}</span>
                   <div><strong>{record.event_name}</strong><small>{record.kind}</small></div>
                   <strong className="result">{record.formatted_result || record.raw_result}</strong>
                   <div><strong>{record.competitor_name}</strong><small>{flag(record.country_code)} {record.competitor_wca_id}</small></div>

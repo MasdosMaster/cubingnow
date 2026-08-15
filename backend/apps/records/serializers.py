@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.competitions.serializers import CompetitionSerializer
+from apps.competitors.geography import continent_for_country_code
 from apps.competitors.serializers import CompetitorSerializer
 
 from .models import Achievement, RecentRecordObservation, Record
@@ -176,6 +177,7 @@ class AchievementSerializer(serializers.ModelSerializer):
         source="result.competitor_wca_id", read_only=True
     )
     country_code = serializers.CharField(source="result.country_code", read_only=True)
+    continent = serializers.SerializerMethodField()
     kind = serializers.CharField(source="result.kind", read_only=True)
     raw_result = serializers.IntegerField(source="result.value", read_only=True)
     formatted_result = serializers.CharField(
@@ -224,6 +226,7 @@ class AchievementSerializer(serializers.ModelSerializer):
             "competitor_name",
             "competitor_wca_id",
             "country_code",
+            "continent",
             "kind",
             "raw_result",
             "formatted_result",
@@ -237,6 +240,9 @@ class AchievementSerializer(serializers.ModelSerializer):
             "notification_eligible",
             "notification_reason",
         ]
+
+    def get_continent(self, obj):
+        return continent_for_country_code(obj.result.country_code)
 
     @staticmethod
     def get_detected_at(obj):
