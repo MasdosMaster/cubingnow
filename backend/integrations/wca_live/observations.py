@@ -1,4 +1,9 @@
 from apps.records.domain import NormalizedResultObservation
+from apps.records.finalization import (
+    RoundFinalizationRule,
+    all_expected_attempts_are_entered,
+    round_result_is_finalized,
+)
 
 from .schemas import NormalizedRoundResult
 
@@ -6,16 +11,20 @@ from .schemas import NormalizedRoundResult
 def result_observations(
     target, result: NormalizedRoundResult, observed_at, raw_observation_id=None
 ):
+    if not round_result_is_finalized(
+        result.attempts,
+        RoundFinalizationRule(
+            expected_attempts=target.expected_attempts or 0,
+            cutoff_attempts=target.cutoff_attempts,
+            cutoff_value=target.cutoff_value,
+        ),
+        event_id=target.event_id,
+    ):
+        return ()
     source_url = (
         "https://live.worldcubeassociation.org/competitions/"
         f"{target.wca_live_competition_id}/rounds/{target.round_id}"
     )
-    best_attempt = None
-    if result.best is not None:
-        best_attempt = next(
-            (index for index, value in enumerate(result.attempts, start=1) if value == result.best),
-            None,
-        )
     common = {
         "source": "wca_live",
         "ingestion_method": "graphql_subscription",
@@ -41,24 +50,24 @@ def result_observations(
         "normalized_payload": result.payload,
         "raw_observation_id": raw_observation_id,
     }
-    observations = [
-        NormalizedResultObservation(
-            **common,
-            kind="single",
-            value=value,
-            attempt_number=index,
-            source_record_tag=(result.single_record_tag if index == best_attempt else ""),
+    observations = []
+    if result.best not in (None, 0):
+        observations.append(
+            NormalizedResultObservation(
+                **common,
+                kind="single",
+                value=result.best,
+                source_record_tag=result.single_record_tag,
+            )
         )
-        for index, value in enumerate(result.attempts, start=1)
-        if value != 0
-    ]
-    if result.average not in (None, 0):
+    if result.average not in (None, 0) and all_expected_attempts_are_entered(
+        result.attempts, target.expected_attempts or 0
+    ):
         observations.append(
             NormalizedResultObservation(
                 **common,
                 kind="average",
                 value=result.average,
-                attempt_number=None,
                 source_record_tag=result.average_record_tag,
             )
         )

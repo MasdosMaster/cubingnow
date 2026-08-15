@@ -10,9 +10,9 @@ They share only pure normalization, result-value formatting/comparison, and disp
 `RecentRecordObservation` uniqueness includes `ingestion_method`, and raw `SourceObservation`
 deduplication is also source-specific. Neither worker reads the other worker's observations.
 
-## Database migration
+## Persistence
 
-The `records.0002_record_ingestion_experiment` migration adds:
+The WCA Live persistence model includes:
 
 - `RecentRecordObservation` for normalized, pipeline-specific record observations;
 - `SubscriptionRound` for discovered targets and per-round subscription status;
@@ -73,6 +73,11 @@ logs `weekend_start - lookback_days`, fetches the complete basic competition lis
 `limit`, filters overlap locally, and then fetches events/rounds for each surviving competition.
 The two-stage fetch is necessary because the equivalent all-in-one query exceeds WCA Live's
 deployed GraphQL complexity limit of 5000.
+
+Round discovery also stores `format.numberOfAttempts`, `format.sortBy`, and strict
+cutoff `numberOfAttempts`/`attemptResult`. These fields distinguish a four-of-five
+in-progress average from a finalized result and recognize a competitor whose result
+ends after failing a cutoff. `round.finished` is not a per-result finalization signal.
 
 During the final live validation on 2026-08-05, this configuration returned 64 competitions from
 the lookback query, 16 overlapping competitions, and 208 unique rounds, with no detail-query
@@ -194,6 +199,13 @@ state without generating a historical flood. Subsequent additions and meaningful
 always evaluated. Repeated snapshots, reordering, restarts, and reconnects do not create new
 observations. Removed rows are persisted as inactive and their active subscription observations
 are marked withdrawn.
+
+Attempts, best, average, and record tags remain in `SubscriptionResultState` throughout
+entry. No `ResultObservation` or `CanonicalResult` is produced until all format attempts
+are nonzero, or all cutoff attempts are entered and none passes the strict cutoff. DNF/DNS
+count as entered; zero does not. A cutoff failure produces a final single but no average.
+After completion, corrections update the same round-and-kind observations and canonical
+revisions.
 
 Record classification comes from WCA Live's authoritative `singleRecordTag` and
 `averageRecordTag` values (`WR`, `CR`, or `NR`). CubingNow does not pretend its receipt time is the

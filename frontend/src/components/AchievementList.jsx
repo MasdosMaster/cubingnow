@@ -40,7 +40,7 @@ export function AchievementList({ level, records, loading, error }) {
               {records.map((record) => (
                 <article className="record-row" role="row" key={record.id}>
                   <span className={`level level-${record.record_level.toLowerCase()}`}>{record.record_level}</span>
-                  <div><strong>{record.event_name}</strong><small>{record.kind}{record.attempt_number ? ` · attempt ${record.attempt_number}` : ""}</small></div>
+                  <div><strong>{record.event_name}</strong><small>{record.kind}</small></div>
                   <strong className="result">{record.formatted_result || record.raw_result}</strong>
                   <div><strong>{record.competitor_name}</strong><small>{flag(record.country_code)} {record.competitor_wca_id}</small></div>
                   <div><strong>{record.competition_name}</strong><small>{record.wca_competition_id}</small></div>
@@ -62,4 +62,3 @@ export function AchievementList({ level, records, loading, error }) {
     </section>
   );
 }
-

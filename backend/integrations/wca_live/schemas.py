@@ -15,6 +15,11 @@ class RoundTarget:
     competition_country_code: str = ""
     round_number: int | None = None
     round_name: str = ""
+    format_id: str = ""
+    format_sort_by: str = ""
+    expected_attempts: int | None = None
+    cutoff_attempts: int | None = None
+    cutoff_value: int | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +70,12 @@ class RecordCandidate:
     source_competition_id: str = ""
     source_competitor_id: str = ""
     competition_country_code: str = ""
+    attempts: tuple[int, ...] = ()
+    final_best: int | None = None
+    final_average: int | None = None
+    expected_attempts: int | None = None
+    cutoff_attempts: int | None = None
+    cutoff_value: int | None = None
 
 
 # Compatibility name used by the existing integration boundary.

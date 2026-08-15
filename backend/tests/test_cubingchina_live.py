@@ -8,11 +8,13 @@ from django.db import connections
 from rest_framework.test import APIClient
 
 from apps.records.models import (
+    CanonicalResult,
     CubingChinaCompetitionTarget,
     CubingChinaResultState,
     CubingChinaRoundTarget,
     IngestionWorkerStatus,
     RecentRecordObservation,
+    ResultObservation,
 )
 from integrations.attendance_types import SourceCompetition
 from integrations.cubingchina.live_client import CubingChinaWebSocketClient
@@ -194,9 +196,10 @@ def test_snapshot_ingestion_is_independent_idempotent_and_handles_corrections():
     duplicate = process_round_snapshot(target.pk, rows, users, observed_at=repeated_at)
     assert first["records_detected"] == 2
     assert duplicate["duplicate"] is True
-    assert RecentRecordObservation.objects.filter(
-        ingestion_method="cubingchina_websocket"
-    ).count() == 2
+    assert (
+        RecentRecordObservation.objects.filter(ingestion_method="cubingchina_websocket").count()
+        == 2
+    )
     assert not RecentRecordObservation.objects.exclude(
         ingestion_method="cubingchina_websocket"
     ).exists()
@@ -242,6 +245,77 @@ def test_snapshot_ingestion_is_independent_idempotent_and_handles_corrections():
 
 
 @pytest.mark.django_db
+def test_positive_cubingchina_average_is_not_canonical_until_all_attempts_are_entered():
+    target = create_target()
+    users = fixture_json("cubingchina_users.json")
+    unfinished = {
+        **fixture_json("cubingchina_round_snapshot.json")[0],
+        "v": [326, 450, 460, 440],
+        "a": 450,
+    }
+
+    stats = process_round_snapshot(target.pk, [unfinished], users)
+
+    assert stats["classification_scopes_queued"] == 0
+    assert CubingChinaResultState.objects.get().attempts == [326, 450, 460, 440]
+    assert not ResultObservation.objects.exists()
+    assert not CanonicalResult.objects.exists()
+
+    finalized = {**unfinished, "v": [326, 450, 460, 440, -1], "a": 450}
+    stats = process_result_update(
+        target.pk,
+        finalized,
+        users,
+        "result.update",
+    )
+
+    assert stats["classification_scopes_queued"] == 2
+    assert set(CanonicalResult.objects.values_list("kind", flat=True)) == {
+        "single",
+        "average",
+    }
+
+
+@pytest.mark.django_db
+def test_finalized_dnf_average_is_preserved_as_a_non_classifiable_fact():
+    target = create_target()
+    row = {
+        **fixture_json("cubingchina_round_snapshot.json")[0],
+        "v": [-1, -1, -1, -1, -1],
+        "b": -1,
+        "a": -1,
+        "sr": "",
+        "ar": "",
+    }
+
+    process_round_snapshot(target.pk, [row], fixture_json("cubingchina_users.json"))
+
+    assert set(CanonicalResult.objects.values_list("kind", "value")) == {
+        ("single", -1),
+        ("average", -1),
+    }
+
+
+@pytest.mark.django_db
+def test_cubingchina_failed_cutoff_finalizes_without_trusting_average_field():
+    target = create_target()
+    target.cutoff = 5
+    target.save(update_fields=["cutoff", "updated_at"])
+    row = {
+        **fixture_json("cubingchina_round_snapshot.json")[0],
+        "v": [600, -1, 0, 0, 0],
+        "b": 600,
+        "a": 450,
+        "sr": "",
+        "ar": "WR",
+    }
+
+    process_round_snapshot(target.pk, [row], fixture_json("cubingchina_users.json"))
+
+    assert list(CanonicalResult.objects.values_list("kind", "value")) == [("single", 600)]
+
+
+@pytest.mark.django_db
 def test_unknown_record_tags_are_persisted_as_state_but_not_observations():
     target = create_target()
     row = {**fixture_json("cubingchina_round_snapshot.json")[0], "sr": "PR", "ar": ""}
@@ -258,9 +332,7 @@ def test_asian_record_tag_creates_continental_observation():
         "sr": "AsR",
         "ar": "",
     }
-    result = process_round_snapshot(
-        target.pk, [row], fixture_json("cubingchina_users.json")
-    )
+    result = process_round_snapshot(target.pk, [row], fixture_json("cubingchina_users.json"))
     observation = RecentRecordObservation.objects.get()
     assert result["records_detected"] == 1
     assert observation.kind == RecentRecordObservation.Kind.SINGLE
@@ -471,6 +543,7 @@ def test_collector_reconnects_resubscribes_and_refetches_snapshots():
         retry_max_seconds=0,
         websocket_client_factory=client_factory,
     )
+
     async def scenario():
         try:
             await supervisor._collector_loop(round_target.competition_id)

@@ -177,9 +177,6 @@ class AchievementSerializer(serializers.ModelSerializer):
     )
     country_code = serializers.CharField(source="result.country_code", read_only=True)
     kind = serializers.CharField(source="result.kind", read_only=True)
-    attempt_number = serializers.IntegerField(
-        source="result.attempt_number", read_only=True, allow_null=True
-    )
     raw_result = serializers.IntegerField(source="result.value", read_only=True)
     formatted_result = serializers.CharField(
         source="result.formatted_result", read_only=True
@@ -228,7 +225,6 @@ class AchievementSerializer(serializers.ModelSerializer):
             "competitor_wca_id",
             "country_code",
             "kind",
-            "attempt_number",
             "raw_result",
             "formatted_result",
             "entered_at",
@@ -263,7 +259,5 @@ class AchievementSerializer(serializers.ModelSerializer):
                 "entered_at": row.entered_at,
                 "observed_at": row.last_observed_at,
             }
-            for row in obj.result.observations.all().order_by(
-                "ingestion_method", "attempt_number", "pk"
-            )
+            for row in obj.result.observations.all().order_by("ingestion_method", "pk")
         ]

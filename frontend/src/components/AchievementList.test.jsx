@@ -18,7 +18,6 @@ it("renders canonical validation and all contributing sources", () => {
         record_level: "WR",
         event_name: "3x3x3 Cube",
         kind: "single",
-        attempt_number: 4,
         formatted_result: "3.90",
         raw_result: 390,
         competitor_name: "Test Cuber",
@@ -39,6 +38,5 @@ it("renders canonical validation and all contributing sources", () => {
   expect(screen.getByText("verified")).toBeTruthy();
   expect(screen.getByText("api polling")).toBeTruthy();
   expect(screen.getByText("graphql subscription")).toBeTruthy();
-  expect(screen.getByText("single · attempt 4")).toBeTruthy();
+  expect(screen.getByText("single")).toBeTruthy();
 });
-

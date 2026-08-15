@@ -7,6 +7,7 @@ query CubeRecordRecentRecords {
     attemptResult
     result {
       id
+      attempts { result }
       best
       average
       enteredAt
@@ -20,6 +21,8 @@ query CubeRecordRecentRecords {
         id
         number
         name
+        format { id shortName numberOfAttempts sortBy }
+        cutoff { attemptResult numberOfAttempts }
         competitionEvent {
           event { id name }
           competition {
@@ -69,7 +72,13 @@ query CubeRecordCompetitionRounds($id: ID!) {
     venues { country { iso2 } }
     competitionEvents {
       event { id name }
-      rounds { id number name }
+      rounds {
+        id
+        number
+        name
+        format { id shortName numberOfAttempts sortBy }
+        cutoff { attemptResult numberOfAttempts }
+      }
     }
   }
 }

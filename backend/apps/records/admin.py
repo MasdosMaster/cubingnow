@@ -65,7 +65,6 @@ class ResultObservationAdmin(admin.ModelAdmin):
         "canonical_result",
         "ingestion_method",
         "kind",
-        "attempt_number",
         "value",
         "source_record_tag",
         "source_claim_trusted",

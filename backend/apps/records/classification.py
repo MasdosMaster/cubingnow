@@ -262,7 +262,12 @@ def _persist_qualifications(
 
 
 @transaction.atomic
-def reclassify_scope(event_id: str, kind: str) -> set[int]:
+def reclassify_scope(
+    event_id: str,
+    kind: str,
+    *,
+    publish_notifications: bool = True,
+) -> set[int]:
     """Compute one scope in memory and persist its complete diff in bulk."""
 
     lock, _created = ResultIdentityScope.objects.get_or_create(
@@ -358,14 +363,18 @@ def reclassify_scope(event_id: str, kind: str) -> set[int]:
     achievements = _persist_achievements(results, desired, event_id, kind, now)
     newly_eligible_ids = _persist_qualifications(results, achievements, now)
 
-    if newly_eligible_ids:
+    if newly_eligible_ids and publish_notifications:
         from apps.notifications.services import publish_achievements_after_commit
 
         publish_achievements_after_commit(newly_eligible_ids)
     return newly_eligible_ids
 
 
-def reclassify_all() -> None:
+def reclassify_all(*, publish_notifications: bool = True) -> None:
     scopes = CanonicalResult.objects.values_list("event_id", "kind").distinct()
     for event_id, kind in scopes:
-        reclassify_scope(event_id, kind)
+        reclassify_scope(
+            event_id,
+            kind,
+            publish_notifications=publish_notifications,
+        )

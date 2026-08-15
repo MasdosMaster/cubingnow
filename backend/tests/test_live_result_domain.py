@@ -2,8 +2,15 @@ from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
+from django.core.management import call_command
 
-from apps.notifications.models import NotificationEvent
+from apps.notifications.models import (
+    NotificationDelivery,
+    NotificationEndpoint,
+    NotificationEvent,
+    NotificationProvider,
+    NotificationType,
+)
 from apps.records.classification import reclassify_scope
 from apps.records.classification_work import (
     mark_classification_scopes_dirty,
@@ -11,6 +18,7 @@ from apps.records.classification_work import (
     worker_identity,
 )
 from apps.records.domain import NormalizedResultObservation
+from apps.records.finalization import RoundFinalizationRule, round_result_is_finalized
 from apps.records.models import (
     Achievement,
     CanonicalResult,
@@ -19,13 +27,14 @@ from apps.records.models import (
     RecordBenchmark,
     RecordValidation,
     ResultObservation,
+    SubscriptionResultState,
+    SubscriptionRound,
     WCARecordSnapshot,
 )
 from apps.records.reconciliation import (
     reconcile_result_observation,
     retract_result_observation,
 )
-from apps.records.snapshot_differ import diff_result_values
 from integrations.wca.record_validation import (
     parse_wca_records,
     refresh_wca_record_validations,
@@ -42,7 +51,6 @@ def observed(
     round_number=1,
     round_id="provider-round-1",
     value=390,
-    attempt_number=1,
     country_code="NL",
     kind="single",
     claim="",
@@ -71,7 +79,6 @@ def observed(
         country_code=country_code,
         kind=kind,
         value=value,
-        attempt_number=attempt_number,
         source_record_tag=claim,
         entered_at=entered_at,
         observed_at=observed_at,
@@ -80,27 +87,16 @@ def observed(
     )
 
 
-def test_full_round_attempt_diff_emits_only_the_new_attempt():
-    changes = diff_result_values([590, 580], [590, 580, 570])
-    assert [(row.change_type, row.attempt_number, row.value) for row in changes] == [
-        ("added", 3, 570)
-    ]
-    assert diff_result_values([590, 580], [590, 580]) == ()
+def test_ao5_is_final_only_after_all_five_attempt_positions_are_entered():
+    rule = RoundFinalizationRule(expected_attempts=5)
+    assert not round_result_is_finalized((495, 510, 488, 470), rule, event_id="333")
+    assert round_result_is_finalized((495, 510, 488, 470, -1), rule, event_id="333")
 
 
-def test_full_round_attempt_diff_handles_corrections_retractions_and_average():
-    changes = diff_result_values(
-        [590, 580, 570],
-        [590, 575],
-        previous_average=580,
-        current_average=None,
-    )
-    assert [row.change_type for row in changes] == [
-        "corrected",
-        "retracted",
-        "retracted",
-    ]
-    assert changes[0].previous_value == 580 and changes[0].value == 575
+def test_failed_cutoff_is_final_without_filling_the_remaining_positions():
+    rule = RoundFinalizationRule(expected_attempts=5, cutoff_attempts=2, cutoff_value=1000)
+    assert round_result_is_finalized((1200, -1, 0, 0, 0), rule, event_id="333")
+    assert not round_result_is_finalized((900, -1, 0, 0, 0), rule, event_id="333")
 
 
 @pytest.mark.django_db
@@ -110,7 +106,6 @@ def test_ws_and_api_reconcile_to_one_result_with_both_provenances():
         method="api_polling",
         source="wca_live",
         source_result="wca-result-1",
-        attempt_number=None,
         value=390,
         claim="WR",
         entered_at=entered_at,
@@ -118,7 +113,6 @@ def test_ws_and_api_reconcile_to_one_result_with_both_provenances():
     ws = replace(
         api,
         ingestion_method="graphql_subscription",
-        attempt_number=1,
         observed_at=api.observed_at + timedelta(seconds=8),
     )
 
@@ -318,14 +312,12 @@ def test_trusted_source_disagreement_blocks_qualification():
         method="api_polling",
         source="wca_live",
         source_result="wca-result-1",
-        attempt_number=None,
         value=390,
         claim="WR",
     )
     ws = replace(
         api,
         ingestion_method="graphql_subscription",
-        attempt_number=1,
         value=395,
         observed_at=api.observed_at + timedelta(seconds=3),
     )
@@ -345,7 +337,6 @@ def test_reconciliation_is_database_idempotent():
         method="api_polling",
         source="wca_live",
         source_result="wca-result-1",
-        attempt_number=None,
         value=390,
         claim="WR",
     )
@@ -358,35 +349,45 @@ def test_reconciliation_is_database_idempotent():
 
 
 @pytest.mark.django_db
-def test_identical_attempt_values_keep_distinct_attempt_identities():
+def test_same_round_level_claim_from_two_methods_has_one_identity():
     api = observed(
         method="api_polling",
         source="wca_live",
         source_result="wca-result-1",
-        attempt_number=None,
         value=390,
         claim="WR",
     )
-    first_attempt = replace(
+    subscription = replace(
         api,
         ingestion_method="graphql_subscription",
-        attempt_number=1,
         observed_at=api.observed_at + timedelta(seconds=1),
-    )
-    second_attempt = replace(
-        first_attempt,
-        attempt_number=2,
-        source_record_tag="",
-        observed_at=api.observed_at + timedelta(seconds=2),
     )
 
     api_row = reconcile_result_observation(api)
-    first_row = reconcile_result_observation(first_attempt)
-    second_row = reconcile_result_observation(second_attempt)
+    subscription_row = reconcile_result_observation(subscription)
 
-    assert api_row.canonical_result_id == first_row.canonical_result_id
-    assert second_row.canonical_result_id != first_row.canonical_result_id
-    assert CanonicalResult.objects.count() == 2
+    assert api_row.canonical_result_id == subscription_row.canonical_result_id
+    assert CanonicalResult.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_fallback_identity_is_promoted_when_the_wca_id_arrives_later():
+    anonymous = observed(competitor="", source_result="provider-result-1")
+    first = reconcile_result_observation(anonymous)
+    original_id = first.canonical_result_id
+    assert first.canonical_result.identity_key.startswith("source|")
+
+    identified = replace(
+        anonymous,
+        competitor_wca_id="2020TEST01",
+        observed_at=anonymous.observed_at + timedelta(seconds=1),
+    )
+    second = reconcile_result_observation(identified)
+    second.canonical_result.refresh_from_db()
+
+    assert second.canonical_result_id == original_id
+    assert second.canonical_result.identity_key == ("wca|TESTOPEN2026|2020TEST01|333|1|single")
+    assert CanonicalResult.objects.count() == 1
 
 
 def wca_records_payload(*, world=400, europe=410, netherlands=420):
@@ -464,16 +465,13 @@ def test_records_api_display_name_validates_equal_national_record(
         {
             "world_records": {},
             "continental_records": {},
-            "national_records": {
-                records_region: {"333": {"average": average}}
-            },
+            "national_records": {records_region: {"333": {"average": average}}},
         },
         source_url="https://www.worldcubeassociation.org/api/v0/records",
     )
     result = reconcile_result_observation(
         observed(
             value=average,
-            attempt_number=None,
             country_code=country_code,
             kind="average",
             claim="NR",
@@ -636,3 +634,94 @@ def test_scope_worker_removes_stale_validation_after_source_retraction():
 
     assert not RecordValidation.objects.filter(result=row.canonical_result).exists()
     assert not Achievement.objects.filter(result=row.canonical_result, status="active").exists()
+
+
+@pytest.mark.django_db
+def test_finalized_backfill_rebuilds_two_facts_without_publishing_notifications():
+    round_target = SubscriptionRound.objects.create(
+        round_id="backfill-round-1",
+        wca_live_competition_id="live-competition-1",
+        wca_competition_id="TestOpen2026",
+        competition_name="Test Open 2026",
+        competition_country_code="ES",
+        competition_start_date=date(2026, 8, 8),
+        competition_end_date=date(2026, 8, 9),
+        event_id="333",
+        event_name="3x3x3 Cube",
+        round_number=1,
+        round_name="Final",
+        format_id="a",
+        expected_attempts=5,
+    )
+    observed_at = datetime(2026, 8, 8, 10, 0, tzinfo=UTC)
+    SubscriptionResultState.objects.create(
+        round=round_target,
+        result_id="backfill-result-1",
+        stable_result_identity="backfill-result-1",
+        competitor_wca_live_id="person-1",
+        competitor_wca_id="2020TEST01",
+        competitor_name="Test Cuber",
+        country_code="NL",
+        attempts=[390, 410, 420, 400, -1],
+        best=390,
+        average=410,
+        single_record_tag="WR",
+        average_record_tag="",
+        meaningful_hash="backfill-hash",
+        normalized_payload={"attempts": [390, 410, 420, 400, -1]},
+        first_observed_at=observed_at,
+        last_observed_at=observed_at,
+        processed_at=observed_at,
+    )
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    old_observation = reconcile_result_observation(
+        observed(
+            method="graphql_subscription",
+            source="wca_live",
+            source_result="old-attempt-result",
+            value=395,
+            claim="WR",
+        )
+    )
+    old_achievement = Achievement.objects.get(
+        result=old_observation.canonical_result,
+        type="WR",
+    )
+    endpoint = NotificationEndpoint()
+    endpoint.issue_management_token()
+    endpoint.save()
+    old_event = NotificationEvent.objects.create(
+        notification_type=NotificationType.RECORD_WR,
+        deduplication_key="old-attempt-achievement",
+        payload={},
+        target_url="/",
+        occurred_at=observed_at,
+        achievement=old_achievement,
+    )
+    old_delivery = NotificationDelivery.objects.create(
+        event=old_event,
+        endpoint=endpoint,
+        provider=NotificationProvider.WEBPUSH,
+        status=NotificationDelivery.Status.RETRY,
+    )
+
+    call_command("backfill_finalized_results")
+    assert CanonicalResult.objects.filter(pk=old_observation.canonical_result_id).exists()
+
+    call_command("backfill_finalized_results", "--apply")
+
+    assert set(CanonicalResult.objects.values_list("kind", "value")) == {
+        ("single", 390),
+        ("average", 410),
+    }
+    assert ResultObservation.objects.count() == 2
+    assert not CanonicalResult.objects.exclude(attempt_number=None).exists()
+    assert not ResultObservation.objects.exclude(attempt_number=None).exists()
+    assert Achievement.objects.filter(type="WR", status="active").exists()
+    assert NotificationEvent.objects.count() == 1
+    old_event.refresh_from_db()
+    old_delivery.refresh_from_db()
+    assert old_event.achievement_id is None
+    assert old_delivery.status == NotificationDelivery.Status.CANCELLED

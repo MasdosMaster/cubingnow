@@ -2,6 +2,15 @@ from dataclasses import dataclass
 from datetime import date, datetime
 
 
+def finalized_observation_key(
+    source: str,
+    ingestion_method: str,
+    source_result_identity: str,
+    kind: str,
+) -> str:
+    return f"{source}|{ingestion_method}|{source_result_identity}|{kind}|final"
+
+
 @dataclass(frozen=True)
 class NormalizedResultObservation:
     """Provider-neutral result evidence passed into reconciliation."""
@@ -26,7 +35,6 @@ class NormalizedResultObservation:
     country_code: str
     kind: str
     value: int
-    attempt_number: int | None
     source_record_tag: str
     entered_at: datetime | None
     observed_at: datetime
@@ -36,10 +44,11 @@ class NormalizedResultObservation:
 
     @property
     def observation_key(self) -> str:
-        slot = f"attempt:{self.attempt_number}" if self.attempt_number is not None else "aggregate"
-        return (
-            f"{self.source}|{self.ingestion_method}|{self.source_result_identity}"
-            f"|{self.kind}|{slot}"
+        return finalized_observation_key(
+            self.source,
+            self.ingestion_method,
+            self.source_result_identity,
+            self.kind,
         )
 
     @property
@@ -63,15 +72,10 @@ class NormalizedResultObservation:
     def proposed_identity_key(self) -> str:
         prefix = self.natural_result_prefix
         if prefix:
-            if self.kind == "single" and self.attempt_number is not None:
-                return f"{prefix}|attempt:{self.attempt_number}"
-            if self.kind == "average":
-                return f"{prefix}|aggregate"
-            return f"{prefix}|source-result:{self.source_result_identity}"
-        slot = f"attempt:{self.attempt_number}" if self.attempt_number is not None else "aggregate"
+            return prefix
         return (
             f"source|{self.source}|{self.source_competition_id}"
-            f"|{self.source_result_identity}|{self.event_id}|{self.kind}|{slot}"
+            f"|{self.source_result_identity}|{self.event_id}|{self.kind}|final"
         )
 
     @property
@@ -80,7 +84,7 @@ class NormalizedResultObservation:
 
         Observation time, raw-frame linkage, and the full provider payload are
         intentionally excluded. A new full snapshot should not rewrite every old
-        attempt merely because another attempt was added to the same result row.
+        finalized claim merely because an irrelevant provider field changed.
         """
 
         return (
@@ -104,17 +108,7 @@ class NormalizedResultObservation:
             self.country_code,
             self.kind,
             self.value,
-            self.attempt_number,
             self.source_record_tag,
             self.entered_at,
             self.source_url,
         )
-
-
-@dataclass(frozen=True)
-class ResultChange:
-    change_type: str
-    kind: str
-    value: int | None
-    attempt_number: int | None = None
-    previous_value: int | None = None

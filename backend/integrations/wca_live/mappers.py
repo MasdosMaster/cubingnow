@@ -29,6 +29,8 @@ def map_record(payload: dict, observed_at: datetime) -> RecordCandidate:
         competition_event = round_payload["competitionEvent"]
         competition = competition_event["competition"]
         event = competition_event["event"]
+        format_payload = round_payload.get("format") or {}
+        cutoff_payload = round_payload.get("cutoff") or {}
         wca_live_competition_id = str(competition.get("id") or "")
         round_id = str(round_payload.get("id") or "")
         return RecordCandidate(
@@ -67,6 +69,14 @@ def map_record(payload: dict, observed_at: datetime) -> RecordCandidate:
             source_result_id=str(result["id"]),
             source_competition_id=wca_live_competition_id,
             source_competitor_id=str(competitor.get("id") or ""),
+            attempts=tuple(
+                int(attempt.get("result") or 0) for attempt in (result.get("attempts") or [])
+            ),
+            final_best=result.get("best"),
+            final_average=result.get("average"),
+            expected_attempts=format_payload.get("numberOfAttempts"),
+            cutoff_attempts=cutoff_payload.get("numberOfAttempts"),
+            cutoff_value=cutoff_payload.get("attemptResult"),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise WCALivePayloadError(f"Invalid WCA Live record payload: {exc}") from exc

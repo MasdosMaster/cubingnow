@@ -89,6 +89,11 @@ def test_discovery_targets_are_bulk_upserted_and_retired_rows_are_reactivated(
             event_id="333",
             event_name="3x3x3 Cube",
             round_number=index,
+            format_id="a",
+            format_sort_by="average",
+            expected_attempts=5,
+            cutoff_attempts=2,
+            cutoff_value=1000,
         )
         for index in range(1, 51)
     ]
@@ -98,6 +103,9 @@ def test_discovery_targets_are_bulk_upserted_and_retired_rows_are_reactivated(
 
     assert len(persisted) == SubscriptionRound.objects.count() == 50
     retired = SubscriptionRound.objects.get(round_id="round-1")
+    assert retired.expected_attempts == 5
+    assert retired.cutoff_attempts == 2
+    assert retired.cutoff_value == 1000
     retired.active = False
     retired.subscription_status = SubscriptionRound.Status.RETIRED
     retired.save(update_fields=["active", "subscription_status", "updated_at"])

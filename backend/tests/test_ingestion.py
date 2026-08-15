@@ -1,6 +1,12 @@
 import pytest
 
-from apps.records.models import IngestionRun, RecentRecordObservation, SourceObservation
+from apps.records.models import (
+    CanonicalResult,
+    IngestionRun,
+    RecentRecordObservation,
+    ResultObservation,
+    SourceObservation,
+)
 from integrations.wca_live.ingestion import ingest_api_record, ingest_record
 
 
@@ -11,14 +17,34 @@ def test_ingestion_is_idempotent():
         "type": "single",
         "tag": "WR",
         "attemptResult": 326,
-        "result": {"id": "result-1", "best": 326, "average": 450, "enteredAt": "2026-08-04T12:00:00Z",
+        "result": {
+            "id": "result-1",
+            "attempts": [{"result": 326}, {"result": 450}, {"result": 500}],
+            "best": 326,
+            "average": 450,
+            "enteredAt": "2026-08-04T12:00:00Z",
             "person": {"wcaId": "2026TEST01", "name": "Test Cuber", "country": {"iso2": "NL"}},
-            "round": {"competitionEvent": {
-                "event": {"id": "333", "name": "3x3x3 Cube"},
-                "competition": {"wcaId": "TestOpen2026", "name": "Test Open 2026",
-                    "startDate": "2026-08-01", "endDate": "2026-08-02",
-                    "venues": [{"name": "Test Venue", "timezone": "Europe/Amsterdam", "country": {"iso2": "NL"}}]}
-            }}}
+            "round": {
+                "format": {"id": "m", "numberOfAttempts": 3, "sortBy": "average"},
+                "cutoff": None,
+                "competitionEvent": {
+                    "event": {"id": "333", "name": "3x3x3 Cube"},
+                    "competition": {
+                        "wcaId": "TestOpen2026",
+                        "name": "Test Open 2026",
+                        "startDate": "2026-08-01",
+                        "endDate": "2026-08-02",
+                        "venues": [
+                            {
+                                "name": "Test Venue",
+                                "timezone": "Europe/Amsterdam",
+                                "country": {"iso2": "NL"},
+                            }
+                        ],
+                    },
+                },
+            },
+        },
     }
     run = IngestionRun.objects.create(mode=IngestionRun.Mode.RECONCILIATION)
 
@@ -27,6 +53,7 @@ def test_ingestion_is_idempotent():
 
     assert first.pk == second.pk
     assert SourceObservation.objects.count() == 1
+    assert ResultObservation.objects.count() == CanonicalResult.objects.count() == 1
 
 
 @pytest.mark.django_db
@@ -68,3 +95,4 @@ def test_api_ingestion_never_populates_subscription_collection():
     assert RecentRecordObservation.objects.filter(
         ingestion_method="graphql_subscription"
     ).count() == 0
+    assert ResultObservation.objects.count() == 0

@@ -1,4 +1,9 @@
 from apps.records.domain import NormalizedResultObservation
+from apps.records.finalization import (
+    all_expected_attempts_are_entered,
+    cubingchina_finalization_rule,
+    round_result_is_finalized,
+)
 
 from .live_schemas import NormalizedCubingChinaResult
 
@@ -6,17 +11,17 @@ from .live_schemas import NormalizedCubingChinaResult
 def result_observations(
     target, result: NormalizedCubingChinaResult, observed_at, raw_observation_id=None
 ):
+    if not round_result_is_finalized(
+        result.attempts,
+        cubingchina_finalization_rule(target),
+        event_id=target.event_id,
+    ):
+        return ()
     competition = target.competition
     source_url = (
         f"https://cubing.com/live/{competition.slug}"
         f"#!/event/{target.event_id}/{target.round_id}/all"
     )
-    best_attempt = None
-    if result.best is not None:
-        best_attempt = next(
-            (index for index, value in enumerate(result.attempts, start=1) if value == result.best),
-            None,
-        )
     common = {
         "source": "cubingchina",
         "ingestion_method": "cubingchina_websocket",
@@ -42,24 +47,25 @@ def result_observations(
         "normalized_payload": result.payload,
         "raw_observation_id": raw_observation_id,
     }
-    observations = [
-        NormalizedResultObservation(
-            **common,
-            kind="single",
-            value=value,
-            attempt_number=index,
-            source_record_tag=(result.single_record_tag if index == best_attempt else ""),
+    observations = []
+    if result.best not in (None, 0):
+        observations.append(
+            NormalizedResultObservation(
+                **common,
+                kind="single",
+                value=result.best,
+                source_record_tag=result.single_record_tag,
+            )
         )
-        for index, value in enumerate(result.attempts, start=1)
-        if value != 0
-    ]
-    if result.average not in (None, 0):
+    rule = cubingchina_finalization_rule(target)
+    if result.average not in (None, 0) and all_expected_attempts_are_entered(
+        result.attempts, rule.expected_attempts
+    ):
         observations.append(
             NormalizedResultObservation(
                 **common,
                 kind="average",
                 value=result.average,
-                attempt_number=None,
                 source_record_tag=result.average_record_tag,
             )
         )

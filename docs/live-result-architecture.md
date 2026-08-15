@@ -5,8 +5,10 @@ CubingNow's production flow is now:
 ```text
 provider payload
   -> immutable SourceObservation
-  -> provider normalization / snapshot diff
-  -> ResultObservation
+  -> normalized Provider Result State (may be unfinished; retains all attempts)
+  -> round-finalization gate
+       -> unfinished: stop here
+       -> finalized: at most one single and one average ResultObservation
   -> fact reconciliation -> CanonicalResult
   -> mark affected event/kind scope dirty (once per ingestion transaction)
   -> durable classification worker
@@ -25,26 +27,29 @@ the public or notification source of truth.
 
 ## Evidence and identity
 
-`SourceObservation` retains immutable provider frames. `ResultObservation` is the
-current normalized source slot and keeps source claim, entry time, observation time,
-raw-frame link, value, attempt position, revision, and retraction state.
+`SourceObservation` retains immutable provider frames. `SubscriptionResultState` and
+`CubingChinaResultState` retain the latest normalized provider row, including every
+attempt, while that row is unfinished or finalized. Intermediate best and average
+changes do not create facts, achievements, dirty classification work, or notifications.
 
-`CanonicalResult` has no record-level field. Its identity uses WCA competition,
-competitor, event, round number, result kind, and attempt position when those fields
-are available. Database-lockable identity scopes serialize genuinely competing
-claims to the same result identity. Classification does not hold this lock while
-ingestion is receiving other results. A value correction updates the same source
-slot and canonical result revision.
+`ResultObservation` is a provider's current finalized round-level claim. It keeps the
+source claim, entry time, observation time, raw-frame link, final best or official
+average, revision, and retraction state. One provider result can produce at most one
+single observation and one average observation.
+
+`CanonicalResult` has no record-level field and never represents an attempt. Its
+natural identity is WCA competition, competitor WCA ID, event, logical round number,
+and result kind. A source-scoped fallback is used while a WCA identity is missing and
+is promoted or merged when the natural identity becomes available. Values are not
+used as identity. Database-lockable identity scopes serialize competing claims to
+the same fact. A correction updates the same observation and canonical revision.
 
 WCA Live's result-level `enteredAt` is preserved separately from CubingNow's local
 `observed_at`. CubingChina does not expose an equivalent timestamp, so its entry time
 remains null.
 
-The WCA Live recent-record endpoint does not expose an attempt number. Reconciliation
-therefore first uses the shared WCA Live result ID, then the provider-neutral natural
-scope and value. If identical values make the attempt intrinsically ambiguous, the
-source evidence stays inspectable and the match is deterministic; a future richer
-upstream ID can strengthen this without changing downstream classification.
+The WCA Live API and subscription paths reconcile by finalized result identity and
+kind. Identical attempt values are irrelevant because only the final best is a fact.
 
 ## Trust, classification, and policy
 
@@ -70,11 +75,16 @@ homepage and notification eligibility and the reason for each decision.
 
 ## Fast ingestion and batched classification
 
-Ingestion commits facts only. A full provider snapshot is normalized and compared
-with the last stored state; unchanged competitor rows are neither reconciled nor
-saved again. Changed state rows are persisted with one upsert. Attempts remain
-separate canonical facts because two record-breaking attempts by one competitor are
-distinct results, but they no longer trigger separate classification passes.
+Ingestion always commits raw evidence and provider state first. A full provider
+snapshot is normalized and compared with the last stored state; unchanged competitor
+rows are neither reconciled nor saved again. A changed unfinished row ends there. A
+newly finalized or corrected row reconciles only its final best and official average.
+
+WCA Live completion uses the round format's expected attempt count and strict-cutoff
+metadata. CubingChina completion uses round format `a` (five attempts) or `m` (three)
+plus its cutoff. DNF and DNS count as entered; zero does not. A failed cutoff is final
+without an average. A nonzero average alone never proves completion. A DNF average
+(`-1`) is retained only after structural completion.
 
 Each ingestion transaction collects the affected `(event_id, kind)` pairs and
 increments each pair's durable `ClassificationScopeWork` version once. The first
@@ -114,6 +124,22 @@ them, run:
 ```bash
 python manage.py reclassify_live_results
 ```
+
+The attempt-level-to-finalized transition is intentionally operational rather than a
+destructive data migration. Pause ingestion and classification workers, then run:
+
+```bash
+python manage.py refresh_wca_live_round_targets
+python manage.py backfill_finalized_results
+python manage.py backfill_finalized_results --apply
+```
+
+The backfill preserves raw observations, provider states, baselines, and sent
+notification events; it rebuilds derived observations, canonical facts, validations,
+achievements, and qualifications. Reclassification suppresses notification
+publication, and pending/retry/processing deliveries tied to obsolete achievements
+are cancelled. The legacy nullable `attempt_number` columns remain temporarily for
+rollback safety and always receive null from the final-only pipeline.
 
 Deferred work is deliberately limited to external-data and product concerns:
 

@@ -17,8 +17,20 @@ A WR, CR, NR, or PR classification associated with one Canonical Result. An Achi
 _Avoid_: Result copy, provider label
 
 **Canonical Result**:
-The single competition result to which observations from one or more providers refer. Corrections revise this identity rather than creating an unrelated result.
+One finalized round-level best single or official average to which claims from one or more providers refer. Corrections revise this identity rather than creating another result.
 _Avoid_: Source result, record row
+
+**Provider Result State**:
+The latest provider-specific state of one competitor's result in a round, whether unfinished or finalized. It retains every entered attempt and may change as the round progresses.
+_Avoid_: Canonical Result, Achievement
+
+**Finalized Result Observation**:
+A provider's current claim about the finalized best single or official average for one competitor in one round. It never represents an individual attempt or unfinished result.
+_Avoid_: Source Observation, Provider Result State
+
+**Round Finalization**:
+The point at which a competitor can receive no more attempts in a round, either because all expected attempts are entered or because the competitor failed a cutoff.
+_Avoid_: Round finished, positive average
 
 **Source Claim**:
 A provider's assertion that an observed result has a particular record label. A Source Claim is evidence and is not CubingNow's classification.
@@ -66,7 +78,7 @@ The human-readable representation of a Result Value according to the event's WCA
 _Avoid_: Raw value
 
 **Source Observation**:
-An immutable payload observed by CubingNow from an external source at a particular moment. Multiple Source Observations may describe changes to the same Canonical Result.
+A provider payload observed by CubingNow at a particular moment and retained as raw evidence. Multiple Source Observations may describe changes to the same Provider Result State.
 _Avoid_: Record, Canonical Result
 
 **Ingestion Run**:
@@ -82,5 +94,5 @@ The chronological calculation inside a Classification Pass. It starts from histo
 _Avoid_: Provider replay, message retry
 
 **Dirty Classification Scope**:
-A durable, versioned request saying that one event and result kind must receive a new Classification Pass because committed facts changed. Many changed attempts in one ingestion transaction create one version increment for that scope.
+A durable, versioned request saying that one event and result kind must receive a new Classification Pass because finalized facts changed. Multiple changes in one ingestion transaction create one version increment for that scope.
 _Avoid_: WebSocket queue item, result observation

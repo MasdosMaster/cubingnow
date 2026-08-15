@@ -131,7 +131,7 @@ class ClassificationScopeWork(models.Model):
 
 
 class CanonicalResult(models.Model):
-    """One real competition result, independently of how many sources observed it."""
+    """One finalized round-level best single or official average."""
 
     class Kind(models.TextChoices):
         SINGLE = "single", "Single"
@@ -169,6 +169,8 @@ class CanonicalResult(models.Model):
     competitor_wca_id = models.CharField(max_length=16, blank=True, db_index=True)
     country_code = models.CharField(max_length=8, blank=True)
     kind = models.CharField(max_length=8, choices=Kind.choices)
+    # Transitional only. Finalized round-level rows always store NULL; remove after
+    # the production backfill has been verified.
     attempt_number = models.PositiveSmallIntegerField(null=True, blank=True)
     value = models.IntegerField()
     formatted_result = models.CharField(max_length=128)
@@ -207,7 +209,7 @@ class CanonicalResult(models.Model):
 
 
 class ResultObservation(models.Model):
-    """Current normalized evidence for one source result slot.
+    """Current normalized evidence for one finalized provider round-level claim.
 
     Immutable provider frames remain in :class:`SourceObservation`; this row is the
     restart-safe normalized projection used by reconciliation.
@@ -238,6 +240,7 @@ class ResultObservation(models.Model):
     source_competition_id = models.CharField(max_length=64, blank=True)
     source_competitor_id = models.CharField(max_length=64, blank=True)
     kind = models.CharField(max_length=8, choices=CanonicalResult.Kind.choices)
+    # Transitional only. Finalized provider claims always store NULL.
     attempt_number = models.PositiveSmallIntegerField(null=True, blank=True)
     value = models.IntegerField()
     source_record_tag = models.CharField(max_length=8, blank=True)
@@ -521,6 +524,11 @@ class SubscriptionRound(models.Model):
     event_name = models.CharField(max_length=128)
     round_number = models.PositiveSmallIntegerField(null=True, blank=True)
     round_name = models.CharField(max_length=128, blank=True)
+    format_id = models.CharField(max_length=8, blank=True)
+    format_sort_by = models.CharField(max_length=16, blank=True)
+    expected_attempts = models.PositiveSmallIntegerField(null=True, blank=True)
+    cutoff_attempts = models.PositiveSmallIntegerField(null=True, blank=True)
+    cutoff_value = models.IntegerField(null=True, blank=True)
     subscription_status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.DISCOVERED
     )

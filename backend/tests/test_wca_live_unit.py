@@ -7,8 +7,10 @@ import pytest
 from django.utils import timezone
 
 from apps.records.models import (
+    CanonicalResult,
     ClassificationScopeWork,
     RecentRecordObservation,
+    ResultObservation,
     SourceObservation,
     SubscriptionResultState,
     SubscriptionRound,
@@ -69,6 +71,9 @@ def create_round():
         event_name="3x3x3 Cube",
         round_number=1,
         round_name="First Round",
+        format_id="m",
+        format_sort_by="average",
+        expected_attempts=3,
     )
 
 
@@ -97,6 +102,10 @@ def candidate(method_time=None):
         source_url="https://live.worldcubeassociation.org/competitions/competition-1/rounds/round-1",
         source_update_timestamp=observed,
         observed_at=observed,
+        attempts=(326, 410, 430),
+        final_best=326,
+        final_average=410,
+        expected_attempts=3,
     )
 
 
@@ -134,8 +143,28 @@ def test_flattens_competitions_events_and_rounds():
             {
                 "event": {"id": "333", "name": "3x3x3 Cube"},
                 "rounds": [
-                    {"id": "round-1", "number": 1, "name": "First Round"},
-                    {"id": "round-2", "number": 2, "name": "Final"},
+                    {
+                        "id": "round-1",
+                        "number": 1,
+                        "name": "First Round",
+                        "format": {
+                            "id": "a",
+                            "numberOfAttempts": 5,
+                            "sortBy": "average",
+                        },
+                        "cutoff": {"attemptResult": 1000, "numberOfAttempts": 2},
+                    },
+                    {
+                        "id": "round-2",
+                        "number": 2,
+                        "name": "Final",
+                        "format": {
+                            "id": "m",
+                            "numberOfAttempts": 3,
+                            "sortBy": "average",
+                        },
+                        "cutoff": None,
+                    },
                 ],
             }
         ],
@@ -143,6 +172,9 @@ def test_flattens_competitions_events_and_rounds():
     targets = flatten_competition_rounds(competition)
     assert [target.round_id for target in targets] == ["round-1", "round-2"]
     assert all(target.event_id == "333" for target in targets)
+    assert targets[0].expected_attempts == 5
+    assert targets[0].cutoff_attempts == 2
+    assert targets[0].cutoff_value == 1000
 
 
 def test_snapshot_normalization_is_stable_and_timezone_aware():
@@ -249,7 +281,7 @@ def test_duplicate_snapshot_and_restart_recovery_are_idempotent():
 
 
 @pytest.mark.django_db
-def test_snapshot_batches_dirty_scope_requests_instead_of_reclassifying_per_attempt(
+def test_snapshot_marks_only_the_finalized_kind_whose_value_changed(
     monkeypatch,
 ):
     create_round()
@@ -285,12 +317,137 @@ def test_snapshot_batches_dirty_scope_requests_instead_of_reclassifying_per_atte
     )
 
     assert second["changes"] == 1
-    assert second["classification_scopes_queued"] == 2
-    assert len(reconciled) == 2
+    assert second["classification_scopes_queued"] == 1
+    assert len(reconciled) == 1
     assert set(ClassificationScopeWork.objects.values_list("kind", "requested_version")) == {
-        ("single", 2),
+        ("single", 1),
         ("average", 2),
     }
+
+
+@pytest.mark.django_db
+def test_four_of_five_attempts_stay_only_in_provider_state_until_finalized():
+    target = create_round()
+    target.format_id = "a"
+    target.expected_attempts = 5
+    target.save(update_fields=["format_id", "expected_attempts", "updated_at"])
+    observed_at = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
+    unfinished = snapshot()
+    unfinished["results"][0]["attempts"] = [
+        {"result": 600},
+        {"result": 620},
+        {"result": 610},
+        {"result": 590},
+    ]
+    unfinished["results"][0]["best"] = 590
+    unfinished["results"][0]["average"] = 605
+
+    stats = process_round_snapshot(
+        "round-1", unfinished, catchup_minutes=300, observed_at=observed_at
+    )
+
+    assert stats["classification_scopes_queued"] == 0
+    assert SubscriptionResultState.objects.get().attempts == [600, 620, 610, 590]
+    assert not ResultObservation.objects.exists()
+    assert not CanonicalResult.objects.exists()
+
+    finalized = copy.deepcopy(unfinished)
+    finalized["results"][0]["attempts"].append({"result": -1})
+    finalized["results"][0]["average"] = 610
+    stats = process_round_snapshot(
+        "round-1",
+        finalized,
+        catchup_minutes=300,
+        observed_at=observed_at + timedelta(seconds=1),
+    )
+
+    assert stats["classification_scopes_queued"] == 2
+    assert set(ResultObservation.objects.values_list("kind", flat=True)) == {
+        "single",
+        "average",
+    }
+    assert CanonicalResult.objects.count() == 2
+
+
+@pytest.mark.django_db
+def test_failed_cutoff_finalizes_one_single_and_no_average():
+    target = create_round()
+    target.format_id = "a"
+    target.expected_attempts = 5
+    target.cutoff_attempts = 2
+    target.cutoff_value = 500
+    target.save(
+        update_fields=[
+            "format_id",
+            "expected_attempts",
+            "cutoff_attempts",
+            "cutoff_value",
+            "updated_at",
+        ]
+    )
+    payload = snapshot()
+    payload["results"][0]["attempts"] = [{"result": 600}, {"result": -1}]
+    payload["results"][0]["best"] = 600
+    payload["results"][0]["average"] = 0
+
+    stats = process_round_snapshot(
+        "round-1",
+        payload,
+        catchup_minutes=300,
+        observed_at=datetime(2026, 8, 5, 12, 0, tzinfo=UTC),
+    )
+
+    assert stats["classification_scopes_queued"] == 1
+    assert list(CanonicalResult.objects.values_list("kind", "value")) == [("single", 600)]
+
+
+@pytest.mark.django_db
+def test_correction_to_unfinished_retracts_then_reuses_finalized_rows():
+    target = create_round()
+    target.format_id = "a"
+    target.expected_attempts = 5
+    target.save(update_fields=["format_id", "expected_attempts", "updated_at"])
+    observed_at = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
+    finalized = snapshot()
+    finalized["results"][0]["attempts"] = [
+        {"result": 600},
+        {"result": 620},
+        {"result": 610},
+        {"result": 590},
+        {"result": 630},
+    ]
+    finalized["results"][0]["best"] = 590
+    finalized["results"][0]["average"] = 610
+    process_round_snapshot(
+        "round-1", finalized, catchup_minutes=300, observed_at=observed_at
+    )
+    original_ids = dict(CanonicalResult.objects.values_list("kind", "pk"))
+
+    unfinished = copy.deepcopy(finalized)
+    unfinished["results"][0]["attempts"].pop()
+    stats = process_round_snapshot(
+        "round-1",
+        unfinished,
+        catchup_minutes=300,
+        observed_at=observed_at + timedelta(seconds=1),
+    )
+    assert stats["classification_scopes_queued"] == 2
+    assert set(CanonicalResult.objects.values_list("status", flat=True)) == {"retracted"}
+
+    corrected = copy.deepcopy(finalized)
+    corrected["results"][0]["attempts"][0]["result"] = 580
+    corrected["results"][0]["best"] = 580
+    stats = process_round_snapshot(
+        "round-1",
+        corrected,
+        catchup_minutes=300,
+        observed_at=observed_at + timedelta(seconds=2),
+    )
+    assert stats["classification_scopes_queued"] == 2
+    assert dict(CanonicalResult.objects.values_list("kind", "pk")) == original_ids
+    single = CanonicalResult.objects.get(kind="single")
+    assert single.value == 580
+    assert single.revision == 2
 
 
 @pytest.mark.django_db

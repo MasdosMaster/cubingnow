@@ -17,83 +17,52 @@ from .source_trust import (
 logger = logging.getLogger(__name__)
 
 
-def _natural_candidates(data: NormalizedResultObservation):
-    if data.natural_result_prefix is None:
-        return CanonicalResult.objects.none()
-    return CanonicalResult.objects.filter(
-        wca_competition_id__iexact=data.wca_competition_id,
-        competitor_wca_id__iexact=data.competitor_wca_id,
-        event_id=data.event_id,
-        round_number=data.round_number,
-        kind=data.kind,
-    )
-
-
-def _find_canonical(data: NormalizedResultObservation) -> CanonicalResult | None:
-    existing = (
+def _existing_observation(data: NormalizedResultObservation) -> ResultObservation | None:
+    return (
         ResultObservation.objects.select_related("canonical_result")
         .filter(observation_key=data.observation_key)
         .first()
     )
-    if existing:
-        return existing.canonical_result
 
-    proposed = CanonicalResult.objects.filter(identity_key=data.proposed_identity_key).first()
-    if proposed:
-        return proposed
 
-    def slot_available(result: CanonicalResult) -> bool:
-        if data.attempt_number is None:
-            return True
-        return (
-            not result.observations.filter(
-                ingestion_method=data.ingestion_method,
-                kind=data.kind,
-                attempt_number__isnull=False,
-            )
-            .exclude(attempt_number=data.attempt_number)
-            .exists()
-        )
-
-    same_source_rows = list(
+def _same_source_canonical(data: NormalizedResultObservation) -> CanonicalResult | None:
+    rows = list(
         ResultObservation.objects.select_related("canonical_result")
         .filter(
             source=data.source,
             source_result_identity=data.source_result_identity,
             kind=data.kind,
-            status=ResultObservation.Status.ACTIVE,
         )
-        .order_by("attempt_number", "pk")
+        .order_by("pk")
     )
-    same_value = next(
-        (
-            row
-            for row in same_source_rows
-            if row.value == data.value and slot_available(row.canonical_result)
-        ),
-        None,
-    )
-    if same_value:
-        return same_value.canonical_result
-    canonical_ids = {row.canonical_result_id for row in same_source_rows}
-    if len(canonical_ids) == 1 and slot_available(same_source_rows[0].canonical_result):
-        return same_source_rows[0].canonical_result
+    canonical_ids = {row.canonical_result_id for row in rows}
+    return rows[0].canonical_result if len(canonical_ids) == 1 else None
 
-    # This value match is the provider-neutral bridge when provider result IDs and
-    # round IDs differ. Attempt position still wins whenever both sources expose it.
-    candidates = _natural_candidates(data).filter(value=data.value)
-    if data.attempt_number is not None:
-        exact = candidates.filter(attempt_number=data.attempt_number).first()
-        if exact:
-            return exact
-    return next(
-        (
-            result
-            for result in candidates.order_by("attempt_number", "pk")
-            if slot_available(result)
-        ),
-        None,
+
+def _find_canonical(
+    data: NormalizedResultObservation,
+    existing: ResultObservation | None,
+) -> CanonicalResult | None:
+    natural_key = data.natural_result_prefix
+    natural = (
+        CanonicalResult.objects.filter(identity_key=natural_key).first() if natural_key else None
     )
+    if existing:
+        current = existing.canonical_result
+        if natural and natural.pk != current.pk:
+            return natural
+        if natural_key and current.identity_key.startswith("source|"):
+            current = CanonicalResult.objects.select_for_update().get(pk=current.pk)
+            try:
+                with transaction.atomic():
+                    current.identity_key = natural_key
+                    current.save(update_fields=["identity_key", "updated_at"])
+            except IntegrityError:
+                return CanonicalResult.objects.get(identity_key=natural_key)
+        return current
+    if natural:
+        return natural
+    return _same_source_canonical(data)
 
 
 def _create_canonical(
@@ -115,7 +84,7 @@ def _create_canonical(
         "competitor_wca_id": data.competitor_wca_id,
         "country_code": data.country_code,
         "kind": data.kind,
-        "attempt_number": data.attempt_number,
+        "attempt_number": None,
         "value": data.value,
         "formatted_result": format_result(data.event_id, data.kind, data.value),
         "entered_at": data.entered_at,
@@ -174,7 +143,7 @@ def _refresh_canonical(result: CanonicalResult) -> None:
             item.pk,
         ),
     )
-    value_changed = result.current_observation_id is not None and result.value != chosen.value
+    value_changed = result.value != chosen.value
     result.current_observation = chosen
     result.value = chosen.value
     result.formatted_result = format_result(result.event_id, result.kind, chosen.value)
@@ -208,8 +177,24 @@ def reconcile_result_observation(
     if data.natural_result_prefix:
         scope, _created = ResultIdentityScope.objects.get_or_create(key=data.natural_result_prefix)
         identity_scope = ResultIdentityScope.objects.select_for_update().get(pk=scope.pk)
-    result = _find_canonical(data) or _create_canonical(data, identity_scope)
+    existing = _existing_observation(data)
+    previous_result = existing.canonical_result if existing else None
+    result = _find_canonical(data, existing) or _create_canonical(data, identity_scope)
     result = CanonicalResult.objects.select_for_update().get(pk=result.pk)
+    natural_key = data.natural_result_prefix
+    if natural_key and result.identity_key != natural_key:
+        natural = (
+            CanonicalResult.objects.select_for_update().filter(identity_key=natural_key).first()
+        )
+        if natural is not None:
+            result = natural
+        elif result.identity_key.startswith("source|"):
+            try:
+                with transaction.atomic():
+                    result.identity_key = natural_key
+                    result.save(update_fields=["identity_key", "updated_at"])
+            except IntegrityError:
+                result = CanonicalResult.objects.select_for_update().get(identity_key=natural_key)
     if identity_scope and result.identity_scope_id is None:
         result.identity_scope = identity_scope
     _update_canonical_context(result, data)
@@ -231,11 +216,7 @@ def reconcile_result_observation(
     if not observation_created:
         observation = ResultObservation.objects.select_for_update().get(pk=observation.pk)
     if observation.canonical_result_id != result.pk:
-        # Once a source slot has a canonical identity, corrections stay attached to
-        # that identity instead of becoming unrelated solves.
-        result = CanonicalResult.objects.select_for_update().get(pk=observation.canonical_result_id)
-        _update_canonical_context(result, data)
-        result.save()
+        observation.canonical_result = result
 
     changed = not observation_created and (
         observation.value != data.value
@@ -249,7 +230,7 @@ def reconcile_result_observation(
     observation.source_competition_id = data.source_competition_id
     observation.source_competitor_id = data.source_competitor_id
     observation.kind = data.kind
-    observation.attempt_number = data.attempt_number
+    observation.attempt_number = None
     observation.value = data.value
     observation.source_record_tag = data.source_record_tag
     observation.source_claim_trusted = record_claim_is_trusted(data.ingestion_method)
@@ -263,8 +244,13 @@ def reconcile_result_observation(
     observation.save()
 
     _refresh_canonical(result)
+    if previous_result and previous_result.pk != result.pk:
+        previous_result = CanonicalResult.objects.select_for_update().get(pk=previous_result.pk)
+        _refresh_canonical(previous_result)
     if not defer_classification:
         validate_result_against_latest_snapshot(result)
+        if previous_result and previous_result.pk != result.pk:
+            validate_result_against_latest_snapshot(previous_result)
         reclassify_scope(result.event_id, result.kind)
     logger.info(
         "result_observation_reconciled source=%s method=%s observation_id=%s canonical_result_id=%s revision=%s",

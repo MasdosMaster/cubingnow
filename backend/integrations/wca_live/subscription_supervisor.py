@@ -213,6 +213,11 @@ class SubscriptionSupervisor:
                         event_name=target.event_name,
                         round_number=target.round_number,
                         round_name=target.round_name,
+                        format_id=target.format_id,
+                        format_sort_by=target.format_sort_by,
+                        expected_attempts=target.expected_attempts,
+                        cutoff_attempts=target.cutoff_attempts,
+                        cutoff_value=target.cutoff_value,
                         active=True,
                     )
                     for target in targets
@@ -230,6 +235,11 @@ class SubscriptionSupervisor:
                     "event_name",
                     "round_number",
                     "round_name",
+                    "format_id",
+                    "format_sort_by",
+                    "expected_attempts",
+                    "cutoff_attempts",
+                    "cutoff_value",
                     "active",
                 ],
             )

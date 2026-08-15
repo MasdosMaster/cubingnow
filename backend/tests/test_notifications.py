@@ -117,6 +117,10 @@ def record_candidate():
         source_url="https://live.worldcubeassociation.org/round-1",
         source_update_timestamp=now,
         observed_at=now,
+        attempts=(391, 420, 430),
+        final_best=391,
+        final_average=420,
+        expected_attempts=3,
     )
 
 

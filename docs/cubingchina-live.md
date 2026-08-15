@@ -36,6 +36,17 @@ round-management, or chat action is implemented.
 
 ## Detection semantics
 
+Every `result.v` attempt is retained in `CubingChinaResultState`, including unfinished
+rows. Format `a` requires five nonzero attempt positions and format `m` requires three;
+DNF/DNS count as entered and zero does not. A competitor who fails the format-specific
+cutoff phase is finalized with a single and no average. CubingNow never treats `a` alone
+as proof of completion, so a positive or `-1` average cannot cross into canonical facts
+while required attempts are still missing.
+
+Once structurally finalized, CubingNow creates at most one source-specific single claim
+for `b` and one average claim for `a`, then reconciles them with other providers. Later
+corrections revise the same round-and-kind identities.
+
 CubingChina exposes record tags as `sr` (single) and `ar` (average). Continental tags (`AfR`,
 `AsR`, `ER`, `NAR`, `OcR`, and `SAR`) are normalized to `CR`; `WR`, `CR`, and `NR` produce
 observations. CubingChina does not expose an entry timestamp, so `detected_at` is the

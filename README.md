@@ -60,6 +60,8 @@ The web API and three collectors are separate processes sharing PostgreSQL. Dock
 an API poller, a GraphQL subscription worker, and a CubingChina live-results worker independently.
 Their record observations,
 deduplication keys, source payloads, and detection timestamps are isolated by ingestion method.
+All attempt lists and unfinished values remain in raw/provider state; canonical facts are created
+only for a finalized round-level best single and official average.
 
 Run a one-off synchronization manually with:
 

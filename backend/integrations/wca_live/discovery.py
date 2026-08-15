@@ -32,6 +32,8 @@ def flatten_competition_rounds(competition: dict) -> list[RoundTarget]:
     for competition_event in competition.get("competitionEvents", []):
         event = competition_event["event"]
         for round_payload in competition_event.get("rounds", []):
+            format_payload = round_payload.get("format") or {}
+            cutoff_payload = round_payload.get("cutoff") or {}
             targets.append(
                 RoundTarget(
                     round_id=str(round_payload["id"]),
@@ -49,6 +51,11 @@ def flatten_competition_rounds(competition: dict) -> list[RoundTarget]:
                     event_name=event["name"],
                     round_number=round_payload.get("number"),
                     round_name=round_payload.get("name") or "",
+                    format_id=str(format_payload.get("id") or ""),
+                    format_sort_by=str(format_payload.get("sortBy") or ""),
+                    expected_attempts=format_payload.get("numberOfAttempts"),
+                    cutoff_attempts=cutoff_payload.get("numberOfAttempts"),
+                    cutoff_value=cutoff_payload.get("attemptResult"),
                 )
             )
     return targets

@@ -6,13 +6,21 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-from apps.records.domain import NormalizedResultObservation
+from apps.records.domain import NormalizedResultObservation, finalized_observation_key
+from apps.records.finalization import (
+    RoundFinalizationRule,
+    all_expected_attempts_are_entered,
+    round_result_is_finalized,
+)
 from apps.records.models import (
     IngestionRun,
     RecentRecordObservation,
     SourceObservation,
 )
-from apps.records.reconciliation import reconcile_result_observation
+from apps.records.reconciliation import (
+    reconcile_result_observation,
+    retract_result_observation,
+)
 
 from .mappers import map_record
 from .result_values import format_result, is_complete
@@ -20,6 +28,25 @@ from .schemas import RecordCandidate
 
 logger = logging.getLogger(__name__)
 RECORD_LEVELS = {"WR", "CR", "NR"}
+
+
+def candidate_is_finalized(candidate: RecordCandidate) -> bool:
+    if not round_result_is_finalized(
+        candidate.attempts,
+        RoundFinalizationRule(
+            expected_attempts=candidate.expected_attempts or 0,
+            cutoff_attempts=candidate.cutoff_attempts,
+            cutoff_value=candidate.cutoff_value,
+        ),
+        event_id=candidate.event_id,
+    ):
+        return False
+    if candidate.kind == "average" and not all_expected_attempts_are_entered(
+        candidate.attempts, candidate.expected_attempts or 0
+    ):
+        return False
+    final_value = candidate.final_best if candidate.kind == "single" else candidate.final_average
+    return final_value not in (None, 0) and candidate.raw_result == final_value
 
 
 def canonical_comparison_key(candidate: RecordCandidate) -> str:
@@ -171,6 +198,24 @@ def persist_record_candidate(
         observation.source_payload = source_payload
         observation.save()
     if reconcile:
+        observation_key = finalized_observation_key(
+            candidate.source,
+            ingestion_method,
+            candidate.stable_result_identity,
+            candidate.kind,
+        )
+        if not candidate_is_finalized(candidate):
+            retracted = retract_result_observation(
+                observation_key,
+                candidate.observed_at,
+                defer_classification=defer_classification,
+            )
+            if retracted and defer_classification and dirty_scopes is not None:
+                dirty_scopes.add((candidate.event_id, candidate.kind))
+            if observation.canonical_result_id is not None:
+                observation.canonical_result = None
+                observation.save(update_fields=["canonical_result"])
+            return observation, created
         normalized = NormalizedResultObservation(
             source=candidate.source,
             ingestion_method=ingestion_method,
@@ -196,7 +241,6 @@ def persist_record_candidate(
             country_code=candidate.country_code,
             kind=candidate.kind,
             value=candidate.raw_result,
-            attempt_number=None,
             source_record_tag=candidate.record_level,
             entered_at=candidate.source_update_timestamp,
             observed_at=candidate.observed_at,
