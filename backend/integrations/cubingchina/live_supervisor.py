@@ -5,6 +5,7 @@ from datetime import UTC, datetime, time, timedelta
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.db import close_old_connections
 from django.utils import timezone
 
 from apps.records.models import (
@@ -27,6 +28,11 @@ from .scraper_client import CubingChinaScraperClient
 
 logger = logging.getLogger(__name__)
 METHOD = RecentRecordObservation.IngestionMethod.CUBINGCHINA_WEBSOCKET
+
+
+def _database_call(function, args, kwargs):
+    close_old_connections()
+    return function(*args, **kwargs)
 
 
 class CubingChinaLiveSupervisor:
@@ -326,7 +332,7 @@ class CubingChinaLiveSupervisor:
 
     @staticmethod
     async def _db(function, *args, **kwargs):
-        return await sync_to_async(function, thread_sensitive=True)(*args, **kwargs)
+        return await sync_to_async(_database_call, thread_sensitive=True)(function, args, kwargs)
 
     def _persist_discovery(self, entries, metadata) -> set[int]:
         now = timezone.now()

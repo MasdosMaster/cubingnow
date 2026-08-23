@@ -3,7 +3,7 @@ import json
 from dataclasses import dataclass
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
 
 from apps.records.models import (
@@ -32,6 +32,50 @@ class ParsedWCARecords:
 
 def _key(level: str, event_id: str, kind: str, region: str = "") -> str:
     return f"{level}|{event_id}|{kind}|{region}"
+
+
+def _changed_record_scopes(
+    previous: dict[str, int], current: dict[str, int]
+) -> set[tuple[str, str]]:
+    """Return event/kind scopes affected by added, changed, or removed records."""
+
+    changed = set()
+    for key in previous.keys() | current.keys():
+        if previous.get(key) == current.get(key):
+            continue
+        _level, event_id, kind, _region = key.split("|", 3)
+        changed.add((event_id, kind))
+    return changed
+
+
+def _relevant_changed_scopes(scopes: set[tuple[str, str]]) -> set[tuple[str, str]]:
+    """Limit refresh work to changed scopes with results or stored validations."""
+
+    if not scopes:
+        return set()
+    scope_filter = Q()
+    for event_id, kind in scopes:
+        scope_filter |= Q(event_id=event_id, kind=kind)
+    active_cubingchina = ResultObservation.objects.filter(
+        canonical_result_id=OuterRef("pk"),
+        source=ResultObservation.Source.CUBINGCHINA,
+        status=ResultObservation.Status.ACTIVE,
+    )
+    existing_wca_validation = RecordValidation.objects.filter(
+        result_id=OuterRef("pk"),
+        validator=RecordValidation.Validator.WCA_RECORDS_API,
+    )
+    return set(
+        CanonicalResult.objects.filter(scope_filter)
+        .annotate(
+            has_active_cubingchina=Exists(active_cubingchina),
+            has_wca_validation=Exists(existing_wca_validation),
+        )
+        .filter(Q(has_active_cubingchina=True) | Q(has_wca_validation=True))
+        .order_by()
+        .values_list("event_id", "kind")
+        .distinct()
+    )
 
 
 def _record_values(container, *, context: str) -> dict[str, dict[str, int]]:
@@ -237,17 +281,37 @@ def validate_scope_against_latest_snapshot(event_id: str, kind: str) -> int:
     snapshot = WCARecordSnapshot.objects.order_by("-last_fetched_at", "-pk").first()
     if snapshot is None:
         return 0
+    active_cubingchina = ResultObservation.objects.filter(
+        canonical_result_id=OuterRef("pk"),
+        source=ResultObservation.Source.CUBINGCHINA,
+        status=ResultObservation.Status.ACTIVE,
+    )
+    existing_wca_validation = RecordValidation.objects.filter(
+        result_id=OuterRef("pk"),
+        validator=RecordValidation.Validator.WCA_RECORDS_API,
+    )
+    relevant_observations = (
+        ResultObservation.objects.filter(status=ResultObservation.Status.ACTIVE)
+        .filter(
+            Q(source=ResultObservation.Source.CUBINGCHINA)
+            | Q(result_evidence_trusted=True)
+        )
+        .order_by()
+    )
     results = list(
         CanonicalResult.objects.filter(event_id=event_id, kind=kind)
-        .filter(
-            Q(
-                observations__source=ResultObservation.Source.CUBINGCHINA,
-                observations__status=ResultObservation.Status.ACTIVE,
-            )
-            | Q(record_validations__validator=RecordValidation.Validator.WCA_RECORDS_API)
+        .annotate(
+            has_active_cubingchina=Exists(active_cubingchina),
+            has_wca_validation=Exists(existing_wca_validation),
         )
-        .distinct()
-        .prefetch_related("observations")
+        .filter(Q(has_active_cubingchina=True) | Q(has_wca_validation=True))
+        .prefetch_related(
+            Prefetch(
+                "observations",
+                queryset=relevant_observations,
+                to_attr="validation_observations",
+            )
+        )
         .order_by("pk")
     )
     if not results:
@@ -268,7 +332,7 @@ def validate_scope_against_latest_snapshot(event_id: str, kind: str) -> int:
     result_updates = []
 
     for result in results:
-        observations = list(result.observations.all())
+        observations = result.validation_observations
         cubingchina_current = [
             row
             for row in observations
@@ -375,17 +439,14 @@ def validate_scope_against_latest_snapshot(event_id: str, kind: str) -> int:
     return len(results)
 
 
+@transaction.atomic
 def refresh_wca_record_validations(payload: dict, *, source_url: str, fetched_at=None):
     from apps.records.classification_work import mark_classification_scopes_dirty
 
+    previous = WCARecordSnapshot.objects.order_by("-last_fetched_at", "-pk").first()
     snapshot = store_wca_record_snapshot(payload, source_url=source_url, fetched_at=fetched_at)
-    scopes = set(
-        CanonicalResult.objects.filter(
-            observations__source=ResultObservation.Source.CUBINGCHINA,
-            observations__status=ResultObservation.Status.ACTIVE,
-        )
-        .values_list("event_id", "kind")
-        .distinct()
+    scopes = _relevant_changed_scopes(
+        _changed_record_scopes(previous.records if previous else {}, snapshot.records)
     )
     mark_classification_scopes_dirty(
         scopes,

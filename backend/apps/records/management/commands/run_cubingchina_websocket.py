@@ -1,14 +1,22 @@
 import asyncio
+import logging
 import os
+import time
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from apps.records.models import IngestionRun, IngestionWorkerStatus, RecentRecordObservation
+from apps.records.worker_recovery import (
+    TRANSIENT_DATABASE_ERRORS,
+    best_effort_database_write,
+    prepare_database_retry,
+)
 from integrations.cubingchina.live_supervisor import CubingChinaLiveSupervisor
 
 METHOD = RecentRecordObservation.IngestionMethod.CUBINGCHINA_WEBSOCKET
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -54,6 +62,23 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        database_attempt = 0
+        while True:
+            try:
+                self._run_session(options)
+                return
+            except TRANSIENT_DATABASE_ERRORS as exc:
+                database_attempt += 1
+                time.sleep(
+                    prepare_database_retry(
+                        database_attempt,
+                        error=exc,
+                        logger=logger,
+                        worker="cubingchina_worker",
+                    )
+                )
+
+    def _run_session(self, options):
         now = timezone.now()
         IngestionWorkerStatus.objects.update_or_create(
             ingestion_method=METHOD,
@@ -96,10 +121,20 @@ class Command(BaseCommand):
             raise
         finally:
             run.finished_at = timezone.now()
-            run.save(update_fields=["status", "error", "finished_at"])
-            IngestionWorkerStatus.objects.filter(ingestion_method=METHOD).update(
-                is_running=False,
-                connected=False,
-                heartbeat_at=timezone.now(),
-                last_stopped_at=timezone.now(),
+            best_effort_database_write(
+                lambda: run.save(update_fields=["status", "error", "finished_at"]),
+                logger=logger,
+                action="cubingchina_run_finished",
+            )
+            best_effort_database_write(
+                lambda: IngestionWorkerStatus.objects.filter(
+                    ingestion_method=METHOD
+                ).update(
+                    is_running=False,
+                    connected=False,
+                    heartbeat_at=timezone.now(),
+                    last_stopped_at=timezone.now(),
+                ),
+                logger=logger,
+                action="cubingchina_worker_stopped",
             )

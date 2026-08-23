@@ -1,15 +1,23 @@
 import asyncio
+import logging
 import os
+import time
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from apps.records.models import IngestionRun, IngestionWorkerStatus, RecentRecordObservation
+from apps.records.worker_recovery import (
+    TRANSIENT_DATABASE_ERRORS,
+    best_effort_database_write,
+    prepare_database_retry,
+)
 from integrations.wca_live.subscription_supervisor import SubscriptionSupervisor
 from integrations.weekend_window import resolve_weekend_window
 
 METHOD = RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -46,6 +54,23 @@ class Command(BaseCommand):
                 "--start and --end must both be ISO dates (YYYY-MM-DD), with end on or after start"
             ) from exc
 
+        database_attempt = 0
+        while True:
+            try:
+                self._run_session(options, weekend_start, weekend_end)
+                return
+            except TRANSIENT_DATABASE_ERRORS as exc:
+                database_attempt += 1
+                time.sleep(
+                    prepare_database_retry(
+                        database_attempt,
+                        error=exc,
+                        logger=logger,
+                        worker="subscription_worker",
+                    )
+                )
+
+    def _run_session(self, options, weekend_start, weekend_end):
         now = timezone.now()
         IngestionWorkerStatus.objects.update_or_create(
             ingestion_method=METHOD,
@@ -91,11 +116,21 @@ class Command(BaseCommand):
             raise
         finally:
             run.finished_at = timezone.now()
-            run.save(update_fields=["status", "error", "finished_at"])
-            IngestionWorkerStatus.objects.filter(ingestion_method=METHOD).update(
-                is_running=False,
-                connected=False,
-                subscribed_round_count=0,
-                heartbeat_at=timezone.now(),
-                last_stopped_at=timezone.now(),
+            best_effort_database_write(
+                lambda: run.save(update_fields=["status", "error", "finished_at"]),
+                logger=logger,
+                action="subscription_run_finished",
+            )
+            best_effort_database_write(
+                lambda: IngestionWorkerStatus.objects.filter(
+                    ingestion_method=METHOD
+                ).update(
+                    is_running=False,
+                    connected=False,
+                    subscribed_round_count=0,
+                    heartbeat_at=timezone.now(),
+                    last_stopped_at=timezone.now(),
+                ),
+                logger=logger,
+                action="subscription_worker_stopped",
             )

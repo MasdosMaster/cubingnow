@@ -274,7 +274,12 @@ class ResultObservation(models.Model):
             models.Index(
                 fields=["source", "ingestion_method", "source_result_identity"],
                 name="result_observation_source_idx",
-            )
+            ),
+            models.Index(
+                fields=["canonical_result"],
+                condition=models.Q(source="cubingchina", status="active"),
+                name="active_cc_result_idx",
+            ),
         ]
 
 

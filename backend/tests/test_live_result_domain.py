@@ -5,6 +5,8 @@ from importlib import import_module
 import pytest
 from django.apps import apps as django_apps
 from django.core.management import call_command
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 
 from apps.notifications.models import (
@@ -42,6 +44,7 @@ from apps.records.reconciliation import (
 from integrations.wca.record_validation import (
     parse_wca_records,
     refresh_wca_record_validations,
+    validate_scope_against_latest_snapshot,
 )
 
 
@@ -640,6 +643,91 @@ def test_wca_snapshot_equality_still_validates_after_official_record_updates():
     assert validation.status == "verified"
     assert validation.result_value == validation.benchmark_value == 390
     assert achievement.qualification.show_on_homepage is True
+
+
+@pytest.mark.django_db
+def test_unchanged_wca_snapshot_does_not_redirty_classification_scopes():
+    payload = wca_records_payload()
+    reconcile_result_observation(observed(value=390), defer_classification=True)
+    refresh_wca_record_validations(
+        payload,
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    work = ClassificationScopeWork.objects.get(event_id="333", kind="single")
+    requested_version = work.requested_version
+
+    refresh_wca_record_validations(
+        payload,
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+
+    work.refresh_from_db()
+    assert work.requested_version == requested_version
+    assert WCARecordSnapshot.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_wca_snapshot_dirties_only_added_changed_or_removed_scopes():
+    reconcile_result_observation(observed(value=390), defer_classification=True)
+    result_222 = replace(
+        observed(source_result="source-result-222", value=90),
+        event_id="222",
+        event_name="2x2x2 Cube",
+    )
+    reconcile_result_observation(result_222, defer_classification=True)
+    initial = wca_records_payload()
+    initial["world_records"]["222"] = {"single": 90}
+    refresh_wca_record_validations(
+        initial,
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    versions = {
+        (row.event_id, row.kind): row.requested_version
+        for row in ClassificationScopeWork.objects.all()
+    }
+
+    changed = wca_records_payload(world=380)
+    changed["world_records"]["222"] = {"single": 90}
+    refresh_wca_record_validations(
+        changed,
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+
+    assert (
+        ClassificationScopeWork.objects.get(event_id="333", kind="single").requested_version
+        == versions[("333", "single")] + 1
+    )
+    assert (
+        ClassificationScopeWork.objects.get(event_id="222", kind="single").requested_version
+        == versions[("222", "single")]
+    )
+
+    removed = wca_records_payload(world=380)
+    refresh_wca_record_validations(
+        removed,
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+
+    assert (
+        ClassificationScopeWork.objects.get(event_id="222", kind="single").requested_version
+        == versions[("222", "single")] + 1
+    )
+
+
+@pytest.mark.django_db
+def test_wca_scope_validation_uses_exists_without_multiplying_joins():
+    refresh_wca_record_validations(
+        wca_records_payload(),
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    reconcile_result_observation(observed(value=390))
+
+    with CaptureQueriesContext(connection) as queries:
+        assert validate_scope_against_latest_snapshot("333", "single") == 1
+
+    sql = "\n".join(query["sql"] for query in queries.captured_queries)
+    assert "EXISTS" in sql
+    assert "LEFT OUTER JOIN" not in sql
 
 
 @pytest.mark.django_db

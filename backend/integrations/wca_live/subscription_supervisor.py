@@ -5,6 +5,7 @@ from datetime import date
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.db import close_old_connections
 from django.utils import timezone
 
 from apps.records.models import (
@@ -22,6 +23,11 @@ from .subscription_ingestion import process_round_snapshot
 
 logger = logging.getLogger(__name__)
 METHOD = RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION
+
+
+def _database_call(function, *args):
+    close_old_connections()
+    return function(*args)
 
 
 class SubscriptionSupervisor:
@@ -186,7 +192,7 @@ class SubscriptionSupervisor:
 
     @staticmethod
     async def _db(function, *args):
-        return await sync_to_async(function, thread_sensitive=True)(*args)
+        return await sync_to_async(_database_call, thread_sensitive=True)(function, *args)
 
     def _persist_targets(self, targets, metadata) -> dict[str, SubscriptionRound]:
         metadata = {
