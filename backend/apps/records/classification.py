@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
 
 from integrations.wca_live.result_values import is_better, is_complete
@@ -47,9 +47,12 @@ def _result_time(result: CanonicalResult):
 
 
 def _trusted_claims(result: CanonicalResult) -> set[str]:
+    observations = getattr(result, "classification_observations", None)
+    if observations is None:
+        observations = result.observations.all()
     return {
         observation.source_record_tag
-        for observation in result.observations.all()
+        for observation in observations
         if observation.status == ResultObservation.Status.ACTIVE
         and observation.source_claim_trusted
         and observation.value == result.value
@@ -57,10 +60,17 @@ def _trusted_claims(result: CanonicalResult) -> set[str]:
     }
 
 
+def _record_validation_rows(result: CanonicalResult):
+    validations = getattr(result, "classification_record_validations", None)
+    if validations is None:
+        validations = result.record_validations.all()
+    return validations
+
+
 def _record_validations(result: CanonicalResult) -> dict[str, RecordValidation]:
     return {
         validation.level: validation
-        for validation in result.record_validations.all()
+        for validation in _record_validation_rows(result)
         if validation.validator == RecordValidation.Validator.WCA_RECORDS_API
         and validation.result_value == result.value
     }
@@ -228,7 +238,7 @@ def _persist_qualifications(
         independently_validated = (
             {
                 validation.level
-                for validation in result.record_validations.all()
+                for validation in _record_validation_rows(result)
                 if validation.validator == RecordValidation.Validator.WCA_RECORDS_API
                 and validation.result_value == result.value
                 and validation.status == RecordValidation.Status.VERIFIED
@@ -313,9 +323,59 @@ def reclassify_scope(
         key=f"classification|{event_id}|{kind}"
     )
     ResultIdentityScope.objects.select_for_update().get(pk=lock.pk)
+    classification_observations = (
+        ResultObservation.objects.filter(
+            status=ResultObservation.Status.ACTIVE,
+            source_claim_trusted=True,
+        )
+        .only(
+            "canonical_result_id",
+            "source_record_tag",
+            "source_claim_trusted",
+            "status",
+            "value",
+        )
+        .order_by()
+    )
+    classification_validations = (
+        RecordValidation.objects.filter(
+            validator=RecordValidation.Validator.WCA_RECORDS_API,
+        )
+        .only(
+            "result_id",
+            "validator",
+            "level",
+            "result_value",
+            "benchmark_value",
+            "status",
+        )
+        .order_by()
+    )
     results = list(
-        _preferred_scope_results(event_id, kind).prefetch_related(
-            "observations", "record_validations"
+        _preferred_scope_results(event_id, kind)
+        .only(
+            "id",
+            "event_id",
+            "kind",
+            "value",
+            "entered_at",
+            "first_observed_at",
+            "country_code",
+            "competitor_wca_id",
+            "validation_status",
+            "validation_reason",
+        )
+        .prefetch_related(
+            Prefetch(
+                "observations",
+                queryset=classification_observations,
+                to_attr="classification_observations",
+            ),
+            Prefetch(
+                "record_validations",
+                queryset=classification_validations,
+                to_attr="classification_record_validations",
+            ),
         )
     )
     results.sort(key=lambda result: (_result_time(result), result.pk))

@@ -19,6 +19,7 @@ from apps.notifications.models import (
 from apps.notifications.services import publish_achievement_notification
 from apps.records.classification import reclassify_scope
 from apps.records.classification_work import (
+    claim_next_scope,
     mark_classification_scopes_dirty,
     process_ready_scopes,
     worker_identity,
@@ -41,6 +42,7 @@ from apps.records.reconciliation import (
     reconcile_result_observation,
     retract_result_observation,
 )
+from integrations.wca import record_validation
 from integrations.wca.record_validation import (
     parse_wca_records,
     refresh_wca_record_validations,
@@ -731,6 +733,41 @@ def test_wca_scope_validation_uses_exists_without_multiplying_joins():
 
 
 @pytest.mark.django_db
+def test_wca_scope_validation_commits_completed_batches(settings, monkeypatch):
+    first = reconcile_result_observation(
+        observed(source_result="batch-result-1", competitor="2026BATCH01", value=390),
+        defer_classification=True,
+    ).canonical_result
+    second = reconcile_result_observation(
+        observed(source_result="batch-result-2", competitor="2026BATCH02", value=395),
+        defer_classification=True,
+    ).canonical_result
+    refresh_wca_record_validations(
+        wca_records_payload(),
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    settings.WCA_RECORD_VALIDATION_BATCH_SIZE = 1
+    original = record_validation._validate_scope_batch
+    calls = 0
+
+    def fail_second_batch(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("simulated batch interruption")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(record_validation, "_validate_scope_batch", fail_second_batch)
+
+    with pytest.raises(RuntimeError, match="simulated batch interruption"):
+        validate_scope_against_latest_snapshot("333", "single")
+
+    assert calls == 2
+    assert first.record_validations.count() == 3
+    assert second.record_validations.count() == 0
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize(
     ("country_code", "records_region", "average"),
     [
@@ -858,6 +895,22 @@ def test_deferred_reconciliation_is_classified_once_by_durable_scope_worker():
     assert work.last_result_count == 1
     achievement = Achievement.objects.get(result=row.canonical_result, type="WR")
     assert achievement.qualification.notification_eligible is True
+
+
+@pytest.mark.django_db
+def test_scope_worker_can_immediately_reclaim_its_own_interrupted_lease():
+    mark_classification_scopes_dirty(
+        {("333", "single")},
+        debounce_seconds=0,
+    )
+    worker_id = worker_identity()
+
+    first_claim = claim_next_scope(worker_id)
+    repeated_claim = claim_next_scope(worker_id)
+
+    assert first_claim is not None
+    assert repeated_claim is not None
+    assert repeated_claim.work_id == first_claim.work_id
 
 
 @pytest.mark.django_db

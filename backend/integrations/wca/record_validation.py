@@ -2,6 +2,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
@@ -271,40 +272,42 @@ def validate_result_against_latest_snapshot(result: CanonicalResult) -> set[str]
     return validate_result_against_snapshot(result, snapshot)
 
 
-def validate_scope_against_latest_snapshot(event_id: str, kind: str) -> int:
-    """Refresh stored WCA validation for relevant results in one dirty scope.
+@transaction.atomic
+def _validate_scope_batch(
+    snapshot: WCARecordSnapshot,
+    result_ids: list[int],
+    *,
+    checked_at,
+) -> int:
+    """Validate a bounded result batch and commit it independently."""
 
-    This never performs an HTTP request. The official endpoint is fetched by the
-    separate snapshot refresh job; classification only reads its latest stored row.
-    """
-
-    snapshot = WCARecordSnapshot.objects.order_by("-last_fetched_at", "-pk").first()
-    if snapshot is None:
-        return 0
-    active_cubingchina = ResultObservation.objects.filter(
-        canonical_result_id=OuterRef("pk"),
-        source=ResultObservation.Source.CUBINGCHINA,
-        status=ResultObservation.Status.ACTIVE,
-    )
-    existing_wca_validation = RecordValidation.objects.filter(
-        result_id=OuterRef("pk"),
-        validator=RecordValidation.Validator.WCA_RECORDS_API,
-    )
     relevant_observations = (
         ResultObservation.objects.filter(status=ResultObservation.Status.ACTIVE)
         .filter(
             Q(source=ResultObservation.Source.CUBINGCHINA)
             | Q(result_evidence_trusted=True)
         )
+        .only(
+            "canonical_result_id",
+            "source",
+            "status",
+            "value",
+            "source_record_tag",
+            "result_evidence_trusted",
+        )
         .order_by()
     )
     results = list(
-        CanonicalResult.objects.filter(event_id=event_id, kind=kind)
-        .annotate(
-            has_active_cubingchina=Exists(active_cubingchina),
-            has_wca_validation=Exists(existing_wca_validation),
+        CanonicalResult.objects.filter(pk__in=result_ids)
+        .only(
+            "id",
+            "event_id",
+            "kind",
+            "country_code",
+            "value",
+            "validation_status",
+            "validation_reason",
         )
-        .filter(Q(has_active_cubingchina=True) | Q(has_wca_validation=True))
         .prefetch_related(
             Prefetch(
                 "observations",
@@ -314,11 +317,6 @@ def validate_scope_against_latest_snapshot(event_id: str, kind: str) -> int:
         )
         .order_by("pk")
     )
-    if not results:
-        return 0
-
-    checked_at = timezone.now()
-    result_ids = [result.pk for result in results]
     existing = list(
         RecordValidation.objects.filter(
             result_id__in=result_ids,
@@ -437,6 +435,50 @@ def validate_scope_against_latest_snapshot(event_id: str, kind: str) -> int:
             ["validation_status", "validation_reason", "updated_at"],
         )
     return len(results)
+
+
+def validate_scope_against_latest_snapshot(event_id: str, kind: str) -> int:
+    """Refresh stored WCA validation in bounded, independently committed batches.
+
+    This never performs an HTTP request. The official endpoint is fetched by the
+    separate snapshot refresh job; classification only reads its latest stored row.
+    """
+
+    snapshot = WCARecordSnapshot.objects.order_by("-last_fetched_at", "-pk").first()
+    if snapshot is None:
+        return 0
+    active_cubingchina = ResultObservation.objects.filter(
+        canonical_result_id=OuterRef("pk"),
+        source=ResultObservation.Source.CUBINGCHINA,
+        status=ResultObservation.Status.ACTIVE,
+    )
+    existing_wca_validation = RecordValidation.objects.filter(
+        result_id=OuterRef("pk"),
+        validator=RecordValidation.Validator.WCA_RECORDS_API,
+    )
+    result_ids = list(
+        CanonicalResult.objects.filter(event_id=event_id, kind=kind)
+        .annotate(
+            has_active_cubingchina=Exists(active_cubingchina),
+            has_wca_validation=Exists(existing_wca_validation),
+        )
+        .filter(Q(has_active_cubingchina=True) | Q(has_wca_validation=True))
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+    if not result_ids:
+        return 0
+
+    checked_at = timezone.now()
+    batch_size = max(settings.WCA_RECORD_VALIDATION_BATCH_SIZE, 1)
+    validated = 0
+    for offset in range(0, len(result_ids), batch_size):
+        validated += _validate_scope_batch(
+            snapshot,
+            result_ids[offset : offset + batch_size],
+            checked_at=checked_at,
+        )
+    return validated
 
 
 @transaction.atomic

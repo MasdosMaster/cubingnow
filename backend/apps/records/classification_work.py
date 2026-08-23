@@ -87,7 +87,11 @@ def claim_next_scope(worker_id: str, *, lease_seconds: int = 300) -> ClaimedScop
     queryset = ClassificationScopeWork.objects.filter(
         requested_version__gt=F("processed_version"),
         not_before__lte=now,
-    ).filter(Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lt=now))
+    ).filter(
+        Q(claimed_by=worker_id)
+        | Q(claim_expires_at__isnull=True)
+        | Q(claim_expires_at__lt=now)
+    )
     queryset = queryset.order_by("dirty_since", "pk")
     if connection.features.has_select_for_update_skip_locked:
         queryset = queryset.select_for_update(skip_locked=True)
@@ -122,17 +126,17 @@ def claim_next_scope(worker_id: str, *, lease_seconds: int = 300) -> ClaimedScop
 def process_claimed_scope(claim: ClaimedScope, worker_id: str) -> bool:
     started = monotonic()
     try:
+        validate_scope_against_latest_snapshot(claim.event_id, claim.kind)
+        reclassify_scope(claim.event_id, claim.kind)
+        result_count = CanonicalResult.objects.filter(
+            event_id=claim.event_id,
+            kind=claim.kind,
+            status__in=[
+                CanonicalResult.Status.ACTIVE,
+                CanonicalResult.Status.CORRECTED,
+            ],
+        ).count()
         with transaction.atomic():
-            validate_scope_against_latest_snapshot(claim.event_id, claim.kind)
-            reclassify_scope(claim.event_id, claim.kind)
-            result_count = CanonicalResult.objects.filter(
-                event_id=claim.event_id,
-                kind=claim.kind,
-                status__in=[
-                    CanonicalResult.Status.ACTIVE,
-                    CanonicalResult.Status.CORRECTED,
-                ],
-            ).count()
             work = ClassificationScopeWork.objects.select_for_update().get(pk=claim.work_id)
             if work.requested_version != claim.target_version or work.claimed_by != worker_id:
                 raise ScopeAdvanced

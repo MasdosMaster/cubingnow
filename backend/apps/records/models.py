@@ -206,6 +206,11 @@ class CanonicalResult(models.Model):
                 name="canonical_result_scope_idx",
             ),
             models.Index(
+                fields=["event_id", "kind", "id"],
+                condition=models.Q(status__in=["active", "corrected"]),
+                name="active_result_scope_order_idx",
+            ),
+            models.Index(
                 fields=[
                     "wca_competition_id",
                     "competitor_wca_id",
