@@ -36,7 +36,7 @@ round-management, or chat action is implemented.
 
 ## Detection semantics
 
-Every `result.v` attempt is retained in `CubingChinaResultState`, including unfinished
+Every `result.v` attempt is retained in `CubingChinaDiffTable`, including unfinished
 rows. Format `a` requires five nonzero attempt positions and format `m` requires three;
 DNF/DNS count as entered and zero does not. A competitor who fails the format-specific
 cutoff phase is finalized with a single and no average. CubingNow never treats `a` alone

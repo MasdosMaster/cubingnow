@@ -10,8 +10,8 @@ from apps.records.classification_work import mark_classification_scopes_dirty
 from apps.records.models import (
     IngestionRun,
     RecentRecordObservation,
-    SubscriptionResultState,
     SubscriptionRound,
+    WCALiveDiffTable,
 )
 from apps.records.reconciliation import (
     reconcile_result_observation,
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 METHOD = RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION
 
 
-def _stored_result(state: SubscriptionResultState) -> NormalizedRoundResult:
+def _stored_result(state: WCALiveDiffTable) -> NormalizedRoundResult:
     return NormalizedRoundResult(
         result_id=state.result_id,
         stable_result_identity=state.stable_result_identity,
@@ -199,7 +199,7 @@ def _synchronize_normalized_observations(
 def _persist_states(
     target: SubscriptionRound,
     results: list[NormalizedRoundResult],
-    existing: dict[str, SubscriptionResultState],
+    existing: dict[str, WCALiveDiffTable],
     observed_at,
 ) -> None:
     if not results:
@@ -208,7 +208,7 @@ def _persist_states(
     for result in results:
         prior = existing.get(result.result_id)
         states.append(
-            SubscriptionResultState(
+            WCALiveDiffTable(
                 round=target,
                 result_id=result.result_id,
                 stable_result_identity=result.stable_result_identity,
@@ -230,7 +230,7 @@ def _persist_states(
                 processed_at=observed_at,
             )
         )
-    SubscriptionResultState.objects.bulk_create(
+    WCALiveDiffTable.objects.bulk_create(
         states,
         update_conflicts=True,
         unique_fields=["round", "result_id"],

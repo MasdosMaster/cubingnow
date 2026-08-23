@@ -31,8 +31,8 @@ from apps.records.models import (
     RecordBenchmark,
     RecordValidation,
     ResultObservation,
-    SubscriptionResultState,
     SubscriptionRound,
+    WCALiveDiffTable,
     WCARecordSnapshot,
 )
 from apps.records.reconciliation import (
@@ -850,7 +850,7 @@ def test_finalized_backfill_rebuilds_two_facts_without_publishing_notifications(
         expected_attempts=5,
     )
     observed_at = datetime(2026, 8, 8, 10, 0, tzinfo=UTC)
-    SubscriptionResultState.objects.create(
+    WCALiveDiffTable.objects.create(
         round=round_target,
         result_id="backfill-result-1",
         stable_result_identity="backfill-result-1",

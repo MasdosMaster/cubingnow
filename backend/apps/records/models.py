@@ -556,7 +556,7 @@ class SubscriptionRound(models.Model):
         ordering = ["competition_start_date", "competition_name", "event_id", "round_number"]
 
 
-class SubscriptionResultState(models.Model):
+class WCALiveDiffTable(models.Model):
     """Latest normalized source state, used as the restart-safe diff baseline."""
 
     round = models.ForeignKey(
@@ -670,7 +670,7 @@ class CubingChinaRoundTarget(models.Model):
         ]
 
 
-class CubingChinaResultState(models.Model):
+class CubingChinaDiffTable(models.Model):
     round = models.ForeignKey(
         CubingChinaRoundTarget, on_delete=models.CASCADE, related_name="result_states"
     )

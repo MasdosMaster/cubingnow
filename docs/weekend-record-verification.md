@@ -16,7 +16,7 @@ The WCA Live persistence model includes:
 
 - `RecentRecordObservation` for normalized, pipeline-specific record observations;
 - `SubscriptionRound` for discovered targets and per-round subscription status;
-- `SubscriptionResultState` for restart-safe normalized snapshot baselines;
+- `WCALiveDiffTable` for restart-safe normalized snapshot baselines;
 - `IngestionWorkerStatus` for worker health and timestamps;
 - an `ingestion_method` dimension on raw source observations and new ingestion-run modes.
 
@@ -188,7 +188,7 @@ rounds without duplicating existing subscriptions.
 
 ## Snapshot and correction policy
 
-`SubscriptionResultState` is the recovery source. An in-memory mapping is only a transport
+`WCALiveDiffTable` is the recovery source. An in-memory mapping is only a transport
 optimization. Result identity is the WCA Live result ID within its persisted round. Meaningful
 state includes attempts, best, average, record tags, competitor identity, and `enteredAt`.
 Ranking, advancing flags, JSON ordering, and row ordering are ignored.
@@ -200,7 +200,7 @@ always evaluated. Repeated snapshots, reordering, restarts, and reconnects do no
 observations. Removed rows are persisted as inactive and their active subscription observations
 are marked withdrawn.
 
-Attempts, best, average, and record tags remain in `SubscriptionResultState` throughout
+Attempts, best, average, and record tags remain in `WCALiveDiffTable` throughout
 entry. No `ResultObservation` or `CanonicalResult` is produced until all format attempts
 are nonzero, or all cutoff attempts are entered and none passes the strict cutoff. DNF/DNS
 count as entered; zero does not. A cutoff failure produces a final single but no average.

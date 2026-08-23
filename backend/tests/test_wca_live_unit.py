@@ -12,8 +12,8 @@ from apps.records.models import (
     RecentRecordObservation,
     ResultObservation,
     SourceObservation,
-    SubscriptionResultState,
     SubscriptionRound,
+    WCALiveDiffTable,
 )
 from integrations.wca_live import subscription_ingestion
 from integrations.wca_live.discovery import (
@@ -259,7 +259,7 @@ def test_duplicate_snapshot_and_restart_recovery_are_idempotent():
     observed_at = datetime(2026, 8, 5, 12, 0, tzinfo=UTC)
     initial = snapshot()
     process_round_snapshot("round-1", initial, catchup_minutes=60, observed_at=observed_at)
-    assert SubscriptionResultState.objects.count() == 1
+    assert WCALiveDiffTable.objects.count() == 1
     assert RecentRecordObservation.objects.count() == 0
     assert SourceObservation.objects.count() == 1
 
@@ -267,7 +267,7 @@ def test_duplicate_snapshot_and_restart_recovery_are_idempotent():
         "round-1", initial, catchup_minutes=60, observed_at=observed_at
     )
     assert duplicate["duplicate"]
-    assert SubscriptionResultState.objects.count() == 1
+    assert WCALiveDiffTable.objects.count() == 1
     assert SourceObservation.objects.count() == 1
 
     restarted_payload = copy.deepcopy(initial)
@@ -347,7 +347,7 @@ def test_four_of_five_attempts_stay_only_in_provider_state_until_finalized():
     )
 
     assert stats["classification_scopes_queued"] == 0
-    assert SubscriptionResultState.objects.get().attempts == [600, 620, 610, 590]
+    assert WCALiveDiffTable.objects.get().attempts == [600, 620, 610, 590]
     assert not ResultObservation.objects.exists()
     assert not CanonicalResult.objects.exists()
 

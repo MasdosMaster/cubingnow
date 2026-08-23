@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from apps.records.classification_work import mark_classification_scopes_dirty
 from apps.records.models import (
-    CubingChinaResultState,
+    CubingChinaDiffTable,
     CubingChinaRoundTarget,
     IngestionRun,
     IngestionWorkerStatus,
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 METHOD = RecentRecordObservation.IngestionMethod.CUBINGCHINA_WEBSOCKET
 
 
-def _stored_result(state: CubingChinaResultState) -> NormalizedCubingChinaResult:
+def _stored_result(state: CubingChinaDiffTable) -> NormalizedCubingChinaResult:
     return NormalizedCubingChinaResult(
         result_id=state.result_id,
         stable_result_identity=state.stable_result_identity,
@@ -204,7 +204,7 @@ def _synchronize_normalized_observations(
 
 
 def _persist_state(target, result, observed_at) -> None:
-    state, created = CubingChinaResultState.objects.get_or_create(
+    state, created = CubingChinaDiffTable.objects.get_or_create(
         round=target,
         result_id=result.result_id,
         defaults={
@@ -240,7 +240,7 @@ def _persist_state(target, result, observed_at) -> None:
 def _persist_states(
     target: CubingChinaRoundTarget,
     results: list[NormalizedCubingChinaResult],
-    existing: dict[str, CubingChinaResultState],
+    existing: dict[str, CubingChinaDiffTable],
     observed_at,
 ) -> None:
     if not results:
@@ -249,7 +249,7 @@ def _persist_states(
     for result in results:
         prior = existing.get(result.result_id)
         states.append(
-            CubingChinaResultState(
+            CubingChinaDiffTable(
                 round=target,
                 result_id=result.result_id,
                 stable_result_identity=result.stable_result_identity,
@@ -271,7 +271,7 @@ def _persist_states(
                 processed_at=observed_at,
             )
         )
-    CubingChinaResultState.objects.bulk_create(
+    CubingChinaDiffTable.objects.bulk_create(
         states,
         update_conflicts=True,
         unique_fields=["round", "result_id"],

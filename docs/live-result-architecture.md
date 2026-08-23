@@ -27,8 +27,8 @@ the public or notification source of truth.
 
 ## Evidence and identity
 
-`SourceObservation` retains immutable provider frames. `SubscriptionResultState` and
-`CubingChinaResultState` retain the latest normalized provider row, including every
+`SourceObservation` retains immutable provider frames. `WCALiveDiffTable` and
+`CubingChinaDiffTable` retain the latest normalized provider row, including every
 attempt, while that row is unfinished or finalized. Intermediate best and average
 changes do not create facts, achievements, dirty classification work, or notifications.
 

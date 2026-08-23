@@ -9,11 +9,11 @@ from apps.records.classification import reclassify_scope
 from apps.records.models import (
     CanonicalResult,
     ClassificationScopeWork,
-    CubingChinaResultState,
+    CubingChinaDiffTable,
     IngestionWorkerStatus,
     RecentRecordObservation,
     ResultObservation,
-    SubscriptionResultState,
+    WCALiveDiffTable,
 )
 from apps.records.reconciliation import reconcile_result_observation
 from integrations.cubingchina.live_ingestion import _stored_result as cubingchina_result
@@ -44,7 +44,7 @@ class Command(BaseCommand):
     def _planned_rows(raw_links):
         missing_metadata = 0
         rows = []
-        wca_states = SubscriptionResultState.objects.filter(active=True).select_related("round")
+        wca_states = WCALiveDiffTable.objects.filter(active=True).select_related("round")
         for state in wca_states.iterator():
             if state.round.expected_attempts is None:
                 missing_metadata += 1
@@ -60,7 +60,7 @@ class Command(BaseCommand):
                     raw_id,
                 )
             )
-        china_states = CubingChinaResultState.objects.filter(active=True).select_related(
+        china_states = CubingChinaDiffTable.objects.filter(active=True).select_related(
             "round", "round__competition"
         )
         for state in china_states.iterator():

@@ -5,7 +5,7 @@ from .models import (
     CanonicalResult,
     ClassificationScopeWork,
     CubingChinaCompetitionTarget,
-    CubingChinaResultState,
+    CubingChinaDiffTable,
     CubingChinaRoundTarget,
     IngestionRun,
     IngestionWorkerStatus,
@@ -19,8 +19,8 @@ from .models import (
     ResultIdentityScope,
     ResultObservation,
     SourceObservation,
-    SubscriptionResultState,
     SubscriptionRound,
+    WCALiveDiffTable,
     WCARecordSnapshot,
 )
 
@@ -30,11 +30,11 @@ admin.site.register(IngestionRun)
 admin.site.register(SourceObservation)
 admin.site.register(RecentRecordObservation)
 admin.site.register(SubscriptionRound)
-admin.site.register(SubscriptionResultState)
+admin.site.register(WCALiveDiffTable)
 admin.site.register(IngestionWorkerStatus)
 admin.site.register(CubingChinaCompetitionTarget)
 admin.site.register(CubingChinaRoundTarget)
-admin.site.register(CubingChinaResultState)
+admin.site.register(CubingChinaDiffTable)
 
 
 @admin.register(CanonicalResult)

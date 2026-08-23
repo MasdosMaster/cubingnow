@@ -10,7 +10,7 @@ from rest_framework.test import APIClient
 from apps.records.models import (
     CanonicalResult,
     CubingChinaCompetitionTarget,
-    CubingChinaResultState,
+    CubingChinaDiffTable,
     CubingChinaRoundTarget,
     IngestionWorkerStatus,
     RecentRecordObservation,
@@ -208,7 +208,7 @@ def test_snapshot_ingestion_is_independent_idempotent_and_handles_corrections():
     assert single.source_result_id == "9001"
     assert single.wca_live_result_id == ""
     assert single.formatted_result == "3.26"
-    assert CubingChinaResultState.objects.get().last_observed_at == repeated_at
+    assert CubingChinaDiffTable.objects.get().last_observed_at == repeated_at
 
     correction = {**rows[0], "b": 320, "v": [320, 450, 460, 440, 500], "sr": "NR"}
     process_result_update(
@@ -233,7 +233,7 @@ def test_snapshot_ingestion_is_independent_idempotent_and_handles_corrections():
     )
     replacement.refresh_from_db()
     assert replacement.status == RecentRecordObservation.Status.WITHDRAWN
-    assert CubingChinaResultState.objects.get().active is True
+    assert CubingChinaDiffTable.objects.get().active is True
 
     process_round_snapshot(
         target.pk,
@@ -241,7 +241,7 @@ def test_snapshot_ingestion_is_independent_idempotent_and_handles_corrections():
         users,
         observed_at=datetime(2026, 8, 9, 8, 15, tzinfo=UTC),
     )
-    assert CubingChinaResultState.objects.get().active is False
+    assert CubingChinaDiffTable.objects.get().active is False
 
 
 @pytest.mark.django_db
@@ -257,7 +257,7 @@ def test_positive_cubingchina_average_is_not_canonical_until_all_attempts_are_en
     stats = process_round_snapshot(target.pk, [unfinished], users)
 
     assert stats["classification_scopes_queued"] == 0
-    assert CubingChinaResultState.objects.get().attempts == [326, 450, 460, 440]
+    assert CubingChinaDiffTable.objects.get().attempts == [326, 450, 460, 440]
     assert not ResultObservation.objects.exists()
     assert not CanonicalResult.objects.exists()
 
@@ -320,7 +320,7 @@ def test_unknown_record_tags_are_persisted_as_state_but_not_observations():
     target = create_target()
     row = {**fixture_json("cubingchina_round_snapshot.json")[0], "sr": "PR", "ar": ""}
     process_round_snapshot(target.pk, [row], fixture_json("cubingchina_users.json"))
-    assert CubingChinaResultState.objects.get().single_record_tag == "PR"
+    assert CubingChinaDiffTable.objects.get().single_record_tag == "PR"
     assert RecentRecordObservation.objects.count() == 0
 
 
