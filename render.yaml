@@ -1,6 +1,8 @@
 databases:
   - name: cubingnow-db
-    plan: free
+    plan: 0.5c-1g
+    diskSizeGB: 10
+    storageAutoscalingEnabled: true
     region: frankfurt
     databaseName: cubingnow
     user: cubingnow
