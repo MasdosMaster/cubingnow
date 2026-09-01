@@ -5,10 +5,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.notifications.models import NotificationDelivery
-from apps.records.classification import rebuild_classification_from_scratch
+from apps.records.classification import reclassify_scope
 from apps.records.models import (
     CanonicalResult,
-    ClassificationWork,
+    ClassificationScopeWork,
     CubingChinaDiffTable,
     IngestionWorkerStatus,
     RecentRecordObservation,
@@ -18,6 +18,7 @@ from apps.records.models import (
 from apps.records.reconciliation import reconcile_result_observation
 from integrations.cubingchina.live_ingestion import _stored_result as cubingchina_result
 from integrations.cubingchina.observations import result_observations as cubingchina_observations
+from integrations.wca.record_validation import validate_scope_against_latest_snapshot
 from integrations.wca_live.observations import result_observations as wca_observations
 from integrations.wca_live.subscription_ingestion import _stored_result as wca_result
 
@@ -100,15 +101,13 @@ class Command(BaseCommand):
                 "ingestion_method", flat=True
             )
         )
-        claimed_revisions = ClassificationWork.objects.filter(
-            status=ClassificationWork.Status.PROCESSING
-        ).count()
-        if running_workers or claimed_revisions:
+        claimed_scopes = ClassificationScopeWork.objects.exclude(claimed_by="").count()
+        if running_workers or claimed_scopes:
             details = []
             if running_workers:
                 details.append("running ingestion workers: " + ", ".join(running_workers))
-            if claimed_revisions:
-                details.append(f"claimed classification revisions: {claimed_revisions}")
+            if claimed_scopes:
+                details.append(f"claimed classification scopes: {claimed_scopes}")
             raise CommandError(
                 "Pause workers before applying the backfill ("
                 + "; ".join(details)
@@ -135,7 +134,7 @@ class Command(BaseCommand):
             )
 
             # These are derived projections. Raw observations, provider state,
-            # export baselines, sent notification events, and subscriptions remain.
+            # benchmarks, sent notification events, and subscriptions are preserved.
             ResultObservation.objects.all().delete()
             CanonicalResult.objects.all().delete()
 
@@ -154,7 +153,13 @@ class Command(BaseCommand):
                     kind=row.kind,
                 ).update(canonical_result=observation.canonical_result)
 
-            rebuild_classification_from_scratch(publish_notifications=False)
+            for event_id, kind in sorted(scopes):
+                validate_scope_against_latest_snapshot(event_id, kind)
+                reclassify_scope(
+                    event_id,
+                    kind,
+                    publish_notifications=False,
+                )
 
         self.stdout.write(
             self.style.SUCCESS(

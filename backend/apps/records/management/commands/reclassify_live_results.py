@@ -1,20 +1,18 @@
 from django.core.management.base import BaseCommand
 
-from apps.records.classification import rebuild_classification_from_scratch
+from apps.records.classification import reclassify_all
 
 
 class Command(BaseCommand):
-    help = "Rebuild revision classification from the active WCA export baseline"
+    help = "Replay canonical live results over current record and personal-best baselines"
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--suppress-notifications",
             action="store_true",
-            help="Rebuild processed revisions without publishing deliveries",
+            help="Rebuild achievements and qualifications without publishing deliveries",
         )
 
     def handle(self, *args, **options):
-        rebuild_classification_from_scratch(
-            publish_notifications=not options["suppress_notifications"]
-        )
-        self.stdout.write(self.style.SUCCESS("Revision classification rebuilt"))
+        reclassify_all(publish_notifications=not options["suppress_notifications"])
+        self.stdout.write(self.style.SUCCESS("Canonical live results reclassified"))

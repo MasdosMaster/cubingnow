@@ -32,8 +32,7 @@ from apps.notifications.services import (
     set_endpoint_preferences,
 )
 from apps.notifications.types import DeliveryOutcome, DeliveryResult
-from apps.records.classification_work import process_ready_work
-from apps.records.models import BaselineMetadata, RecentRecordObservation
+from apps.records.models import RecentRecordObservation
 from integrations.wca_live.ingestion import persist_record_candidate
 from integrations.wca_live.schemas import RecordCandidate
 
@@ -421,15 +420,6 @@ def test_canonical_event_deduplicates_sources_and_deliveries():
 @override_settings(PUSH_RECORD_EVENT_SOURCE="all")
 def test_api_and_graphql_observations_publish_one_event(django_capture_on_commit_callbacks):
     endpoint()
-    now = timezone.now()
-    BaselineMetadata.objects.create(
-        export_generated_at=now,
-        downloaded_at=now,
-        source_filename="test-export.zip",
-        source_version="test",
-        rebuilt_at=now,
-        is_active=True,
-    )
     item = record_candidate()
     with django_capture_on_commit_callbacks(execute=True):
         persist_record_candidate(
@@ -442,7 +432,6 @@ def test_api_and_graphql_observations_publish_one_event(django_capture_on_commit
             RecentRecordObservation.IngestionMethod.GRAPHQL_SUBSCRIPTION,
             {"source": "subscription"},
         )
-        process_ready_work("notification-test", limit=10)
     assert RecentRecordObservation.objects.count() == 2
     assert NotificationEvent.objects.count() == 1
     assert NotificationDelivery.objects.count() == 1

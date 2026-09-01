@@ -69,7 +69,7 @@ query CubeRecordCompetitionRounds($id: ID!) {
     name
     startDate
     endDate
-    venues { timezone country { iso2 } }
+    venues { country { iso2 } }
     competitionEvents {
       event { id name }
       rounds {

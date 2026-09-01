@@ -1,23 +1,19 @@
 from django.contrib import admin
 
 from .models import (
-    BaselineMetadata,
-    BaselineRecordsAverage,
-    BaselineRecordsSingle,
+    Achievement,
     CanonicalResult,
-    CanonicalResultRevision,
-    ClassificationWork,
+    ClassificationScopeWork,
     CubingChinaCompetitionTarget,
     CubingChinaDiffTable,
     CubingChinaRoundTarget,
     IngestionRun,
     IngestionWorkerStatus,
-    LiveRecordsAverage,
-    LiveRecordsSingle,
-    ProcessedResult,
-    ProcessedResultRecordLevel,
+    PersonalBestBaseline,
+    QualificationDecision,
     RecentRecordObservation,
     Record,
+    RecordBenchmark,
     RecordValidation,
     Result,
     ResultIdentityScope,
@@ -79,41 +75,39 @@ class ResultObservationAdmin(admin.ModelAdmin):
     search_fields = ("observation_key", "source_result_identity")
 
 
-@admin.register(ProcessedResultRecordLevel)
-class ProcessedResultRecordLevelAdmin(admin.ModelAdmin):
+@admin.register(Achievement)
+class AchievementAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "processed_result",
-        "record_level",
-        "classification_outcome",
-        "recognition_status",
-        "currently_holds",
+        "result",
+        "type",
+        "status",
+        "classification_reason",
+        "source_claim_supported",
     )
-    list_filter = ("record_level", "classification_outcome", "recognition_status")
+    list_filter = ("type", "status", "classification_reason")
 
 
+admin.site.register(QualificationDecision)
+admin.site.register(RecordBenchmark)
 admin.site.register(RecordValidation)
 admin.site.register(WCARecordSnapshot)
+admin.site.register(PersonalBestBaseline)
 admin.site.register(ResultIdentityScope)
-admin.site.register(CanonicalResultRevision)
-admin.site.register(ProcessedResult)
-admin.site.register(BaselineMetadata)
-admin.site.register(BaselineRecordsSingle)
-admin.site.register(BaselineRecordsAverage)
-admin.site.register(LiveRecordsSingle)
-admin.site.register(LiveRecordsAverage)
 
 
-@admin.register(ClassificationWork)
-class ClassificationWorkAdmin(admin.ModelAdmin):
+@admin.register(ClassificationScopeWork)
+class ClassificationScopeWorkAdmin(admin.ModelAdmin):
     list_display = (
-        "canonical_result",
-        "revision",
-        "action",
-        "status",
-        "attempts",
+        "event_id",
+        "kind",
+        "requested_version",
+        "processed_version",
+        "dirty_since",
         "claimed_by",
-        "completed_at",
+        "last_duration_ms",
+        "last_result_count",
+        "last_completed_at",
     )
-    list_filter = ("action", "status")
-    search_fields = ("canonical_result__identity_key", "claimed_by", "last_error")
+    list_filter = ("kind",)
+    search_fields = ("event_id", "claimed_by", "last_error")

@@ -13,7 +13,6 @@ class RoundTarget:
     event_id: str
     event_name: str
     competition_country_code: str = ""
-    competition_timezone: str = ""
     round_number: int | None = None
     round_name: str = ""
     format_id: str = ""
@@ -71,7 +70,6 @@ class RecordCandidate:
     source_competition_id: str = ""
     source_competitor_id: str = ""
     competition_country_code: str = ""
-    competition_timezone: str = ""
     attempts: tuple[int, ...] = ()
     final_best: int | None = None
     final_average: int | None = None

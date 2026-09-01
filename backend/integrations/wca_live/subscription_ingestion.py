@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from apps.records.classification_work import mark_classification_scopes_dirty
 from apps.records.models import (
     IngestionRun,
     RecentRecordObservation,
@@ -353,7 +354,10 @@ def process_round_snapshot(
                 active=False, last_observed_at=observed_at, processed_at=observed_at
             )
 
-        queued_scopes = len(dirty_scopes)
+        queued_scopes = mark_classification_scopes_dirty(
+            dirty_scopes,
+            observed_at=observed_at,
+        )
 
         target.last_message_at = observed_at
         target.last_processed_snapshot_at = timezone.now()

@@ -40,8 +40,6 @@ class NormalizedResultObservation:
     observed_at: datetime
     source_url: str
     normalized_payload: dict
-    competition_timezone: str = ""
-    competition_local_date: date | None = None
     raw_observation_id: int | None = None
 
     @property
@@ -110,8 +108,7 @@ class NormalizedResultObservation:
             self.country_code,
             self.kind,
             self.value,
+            self.source_record_tag,
             self.entered_at,
             self.source_url,
-            self.competition_timezone,
-            self.competition_local_date,
         )

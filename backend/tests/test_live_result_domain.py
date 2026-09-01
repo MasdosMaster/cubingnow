@@ -1,79 +1,88 @@
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
+from importlib import import_module
 
 import pytest
-from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.apps import apps as django_apps
+from django.core.management import call_command
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+from rest_framework.test import APIClient
 
-from apps.notifications.models import NotificationEvent
-from apps.records import classification_work
-from apps.records.classification import (
-    rebuild_classification_from_scratch,
-    seed_live_records_from_baseline,
+from apps.notifications.models import (
+    NotificationDelivery,
+    NotificationEndpoint,
+    NotificationEvent,
+    NotificationProvider,
+    NotificationType,
 )
+from apps.notifications.services import publish_achievement_notification
+from apps.records.classification import reclassify_scope
 from apps.records.classification_work import (
-    claim_next_work,
-    process_claimed_work,
-    process_ready_work,
+    claim_next_scope,
+    mark_classification_scopes_dirty,
+    process_ready_scopes,
+    worker_identity,
 )
 from apps.records.domain import NormalizedResultObservation
+from apps.records.finalization import RoundFinalizationRule, round_result_is_finalized
 from apps.records.models import (
-    BaselineMetadata,
-    BaselineRecordsAverage,
-    BaselineRecordsSingle,
-    CanonicalResultRevision,
-    ClassificationWork,
-    LiveRecordsAverage,
-    LiveRecordsSingle,
-    ProcessedResult,
-    ProcessedResultRecordLevel,
+    Achievement,
+    CanonicalResult,
+    ClassificationScopeWork,
+    PersonalBestBaseline,
+    RecordBenchmark,
+    RecordValidation,
+    ResultObservation,
+    SubscriptionRound,
+    WCALiveDiffTable,
+    WCARecordSnapshot,
 )
 from apps.records.reconciliation import (
     reconcile_result_observation,
     retract_result_observation,
 )
-from integrations.wca.record_validation import refresh_wca_record_validations
-
-NOW = datetime(2026, 8, 8, 10, 0, tzinfo=UTC)
+from integrations.wca import record_validation
+from integrations.wca.record_validation import (
+    parse_wca_records,
+    refresh_wca_record_validations,
+    validate_scope_against_latest_snapshot,
+)
 
 
 def observed(
     *,
+    method="cubingchina_websocket",
+    source="cubingchina",
     source_result="source-result-1",
-    competition="TestOpen2026",
-    competition_name="Test Open 2026",
     competitor="2020TEST01",
     competitor_name="Test Cuber",
     round_number=1,
-    round_id="round-1",
-    value=900,
+    round_id="provider-round-1",
+    value=390,
     country_code="NL",
-    event_id="333",
-    event_name="3x3x3 Cube",
     kind="single",
     claim="",
-    source="wca_live",
-    ingestion_method="api_polling",
-    entered_at=NOW,
-    observed_at=NOW,
+    entered_at=None,
+    observed_at=None,
 ):
+    observed_at = observed_at or datetime(2026, 8, 8, 10, 0, tzinfo=UTC)
     return NormalizedResultObservation(
         source=source,
-        ingestion_method=ingestion_method,
+        ingestion_method=method,
         source_result_identity=source_result,
-        source_competition_id=competition,
+        source_competition_id="provider-competition-1",
         source_competitor_id=competitor,
-        wca_competition_id=competition,
-        competition_name=competition_name,
-        competition_country_code="NL",
+        wca_competition_id="TestOpen2026",
+        competition_name="Test Open 2026",
+        competition_country_code="ES",
         competition_start_date=date(2026, 8, 8),
         competition_end_date=date(2026, 8, 9),
-        competition_timezone="Europe/Amsterdam",
         round_id=round_id,
         round_number=round_number,
         round_name=f"Round {round_number}",
-        event_id=event_id,
-        event_name=event_name,
+        event_id="333",
+        event_name="3x3x3 Cube",
         competitor_name=competitor_name,
         competitor_wca_id=competitor,
         country_code=country_code,
@@ -87,713 +96,969 @@ def observed(
     )
 
 
-def seed_baseline(*, kind="single", value=1000, people=()):
-    activate_baseline()
-    model = BaselineRecordsSingle if kind == "single" else BaselineRecordsAverage
-    model.objects.create(record_holder="World", record_type="WR", event_333=value)
-    model.objects.create(record_holder="Europe", record_type="CR", event_333=value)
-    model.objects.create(record_holder="Netherlands", record_type="NR", event_333=value)
-    for person in people:
-        model.objects.create(record_holder=person, record_type="PR", event_333=value)
-    seed_live_records_from_baseline()
+def test_ao5_is_final_only_after_all_five_attempt_positions_are_entered():
+    rule = RoundFinalizationRule(expected_attempts=5)
+    assert not round_result_is_finalized((495, 510, 488, 470), rule, event_id="333")
+    assert round_result_is_finalized((495, 510, 488, 470, -1), rule, event_id="333")
 
 
-def seed_two_country_baseline(*, value=1000, people=()):
-    activate_baseline()
-    BaselineRecordsSingle.objects.create(
-        record_holder="World", record_type="WR", event_333=value
-    )
-    for continent in ("Europe", "South America"):
-        BaselineRecordsSingle.objects.create(
-            record_holder=continent, record_type="CR", event_333=value
-        )
-    for country in ("Netherlands", "Argentina"):
-        BaselineRecordsSingle.objects.create(
-            record_holder=country, record_type="NR", event_333=value
-        )
-    for person in people:
-        BaselineRecordsSingle.objects.create(
-            record_holder=person, record_type="PR", event_333=value
-        )
-    seed_live_records_from_baseline()
-
-
-def activate_baseline():
-    BaselineMetadata.objects.get_or_create(
-        is_active=True,
-        defaults={
-            "export_generated_at": NOW,
-            "downloaded_at": NOW,
-            "source_filename": "test-export.zip",
-            "source_version": "test",
-            "rebuilt_at": NOW,
-            "absorbed_competition_ids": [],
-        },
-    )
-
-
-def settle():
-    worker = "test-worker"
-    while process_ready_work(worker, limit=100):
-        pass
-
-
-def level(result, record_level):
-    return ProcessedResultRecordLevel.objects.get(
-        processed_result=result, record_level=record_level
-    )
+def test_failed_cutoff_is_final_without_filling_the_remaining_positions():
+    rule = RoundFinalizationRule(expected_attempts=5, cutoff_attempts=2, cutoff_value=1000)
+    assert round_result_is_finalized((1200, -1, 0, 0, 0), rule, event_id="333")
+    assert not round_result_is_finalized((900, -1, 0, 0, 0), rule, event_id="333")
 
 
 @pytest.mark.django_db
-def test_reconciliation_creates_immutable_revision_and_only_one_work_for_duplicates():
-    data = observed(claim="WR")
-    row = reconcile_result_observation(data)
-    reconcile_result_observation(replace(data, observed_at=NOW + timedelta(seconds=5)))
+def test_ws_and_api_reconcile_to_one_result_with_both_provenances():
+    entered_at = datetime(2026, 8, 8, 9, 59, tzinfo=UTC)
+    api = observed(
+        method="api_polling",
+        source="wca_live",
+        source_result="wca-result-1",
+        value=390,
+        claim="WR",
+        entered_at=entered_at,
+    )
+    ws = replace(
+        api,
+        ingestion_method="graphql_subscription",
+        observed_at=api.observed_at + timedelta(seconds=8),
+    )
+
+    first = reconcile_result_observation(api)
+    second = reconcile_result_observation(ws)
+
+    assert first.canonical_result_id == second.canonical_result_id
+    result = CanonicalResult.objects.get()
+    assert result.observations.count() == 2
+    assert result.entered_at == entered_at
+    assert set(result.observations.values_list("ingestion_method", flat=True)) == {
+        "api_polling",
+        "graphql_subscription",
+    }
+
+
+@pytest.mark.django_db
+def test_provider_neutral_natural_identity_reconciles_cubingchina_and_wca_live():
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    cubingchina = observed(value=390, source_result="cubingchina-result-9")
+    wca_live = replace(
+        cubingchina,
+        source="wca_live",
+        ingestion_method="graphql_subscription",
+        source_result_identity="wca-live-result-7",
+        source_competition_id="wca-live-competition-1",
+        source_competitor_id="wca-live-person-1",
+        round_id="wca-live-round-1",
+        entered_at=datetime(2026, 8, 8, 9, 59, tzinfo=UTC),
+        observed_at=cubingchina.observed_at + timedelta(seconds=5),
+    )
+
+    first = reconcile_result_observation(cubingchina)
+    second = reconcile_result_observation(wca_live)
+
+    assert first.canonical_result_id == second.canonical_result_id
+    result = CanonicalResult.objects.get()
+    result.refresh_from_db()
+    assert result.validation_status == "verified"
+    assert set(result.observations.values_list("source", flat=True)) == {
+        "cubingchina",
+        "wca_live",
+    }
+    assert Achievement.objects.get(result=result, type="WR").qualification.show_on_homepage
+
+
+@pytest.mark.django_db
+def test_finalized_result_retires_legacy_projection_and_reuses_its_notification():
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    old_observation = reconcile_result_observation(
+        observed(
+            method="api_polling",
+            source="wca_live",
+            source_result="legacy-result",
+            value=390,
+            claim="WR",
+        )
+    )
+    old_result = old_observation.canonical_result
+    old_result.identity_key += "|attempt:3"
+    old_result.attempt_number = 3
+    old_result.save(update_fields=["identity_key", "attempt_number", "updated_at"])
+    old_observation.attempt_number = 3
+    old_observation.save(update_fields=["attempt_number", "updated_at"])
+    old_achievement = Achievement.objects.get(result=old_result, type="WR")
+
+    endpoint = NotificationEndpoint()
+    endpoint.issue_management_token()
+    endpoint.save()
+    old_event = NotificationEvent.objects.create(
+        notification_type=NotificationType.RECORD_WR,
+        deduplication_key=f"record:achievement:{old_result.identity_key}|WR",
+        payload={
+            "record_level": "WR",
+            "event_id": "333",
+            "kind": "single",
+            "formatted_result": "3.90",
+            "competitor_name": "Test Cuber",
+            "competition_name": "Test Open 2026",
+        },
+        target_url="/",
+        occurred_at=old_result.first_observed_at,
+        achievement=old_achievement,
+    )
+    delivery = NotificationDelivery.objects.create(
+        event=old_event,
+        endpoint=endpoint,
+        provider=NotificationProvider.WEBPUSH,
+        status=NotificationDelivery.Status.RETRY,
+    )
+
+    final_observation = reconcile_result_observation(
+        observed(
+            method="api_polling",
+            source="wca_live",
+            source_result="final-result",
+            value=390,
+            claim="WR",
+            observed_at=old_result.first_observed_at + timedelta(minutes=1),
+        )
+    )
+    final_result = final_observation.canonical_result
+    final_achievement = Achievement.objects.get(result=final_result, type="WR")
+
+    old_achievement.refresh_from_db()
+    old_achievement.qualification.refresh_from_db()
+    assert old_achievement.status == Achievement.Status.WITHDRAWN
+    assert old_achievement.qualification.show_on_homepage is False
+    assert old_achievement.qualification.notification_eligible is False
+
+    # Even if stale projection flags survive a partial rollout, the public API
+    # still prefers the finalized fact and cannot show the duplicate.
+    old_achievement.status = Achievement.Status.ACTIVE
+    old_achievement.save(update_fields=["status", "updated_at"])
+    old_achievement.qualification.show_on_homepage = True
+    old_achievement.qualification.save(
+        update_fields=["show_on_homepage", "updated_at"]
+    )
+    response = APIClient().get("/api/records/?level=WR")
+    assert response.status_code == 200
+    assert response.data["count"] == 1
+    assert response.data["results"][0]["canonical_result_id"] == final_result.pk
+
+    event, created = publish_achievement_notification(final_achievement)
+
+    assert event == old_event
+    assert created is False
+    assert NotificationEvent.objects.count() == 1
+    old_event.refresh_from_db()
+    delivery.refresh_from_db()
+    assert old_event.achievement_id == final_achievement.pk
+    assert delivery.status == NotificationDelivery.Status.CANCELLED
+    assert delivery.last_error_code == "finalized_identity_cutover"
+
+
+@pytest.mark.django_db
+def test_recovery_migration_retires_duplicates_and_cancels_the_existing_queue():
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    legacy_observation = reconcile_result_observation(
+        observed(
+            method="api_polling",
+            source="wca_live",
+            source_result="migration-legacy-result",
+            value=390,
+            claim="WR",
+        )
+    )
+    legacy_result = legacy_observation.canonical_result
+    legacy_result.identity_key += "|attempt:3"
+    legacy_result.attempt_number = 3
+    legacy_result.save(update_fields=["identity_key", "attempt_number", "updated_at"])
+    legacy_observation.attempt_number = 3
+    legacy_observation.save(update_fields=["attempt_number", "updated_at"])
+    legacy_achievement = Achievement.objects.get(result=legacy_result, type="WR")
+
+    final_observation = reconcile_result_observation(
+        observed(
+            method="api_polling",
+            source="wca_live",
+            source_result="migration-final-result",
+            value=390,
+            claim="WR",
+            observed_at=legacy_result.first_observed_at + timedelta(minutes=1),
+        )
+    )
+    final_achievement = Achievement.objects.get(
+        result=final_observation.canonical_result,
+        type="WR",
+    )
+
+    legacy_achievement.status = Achievement.Status.ACTIVE
+    legacy_achievement.save(update_fields=["status", "updated_at"])
+    legacy_achievement.qualification.show_on_homepage = True
+    legacy_achievement.qualification.notification_eligible = True
+    legacy_achievement.qualification.save(
+        update_fields=["show_on_homepage", "notification_eligible", "updated_at"]
+    )
+
+    old_event = NotificationEvent.objects.create(
+        notification_type=NotificationType.RECORD_WR,
+        deduplication_key=f"record:achievement:{legacy_result.identity_key}|WR",
+        payload={},
+        target_url="/",
+        occurred_at=legacy_result.first_observed_at,
+        achievement=legacy_achievement,
+    )
+    current_event = NotificationEvent.objects.create(
+        notification_type=NotificationType.RECORD_WR,
+        deduplication_key=(
+            f"record:achievement:{final_observation.canonical_result.identity_key}|WR"
+        ),
+        payload={},
+        target_url="/",
+        occurred_at=final_observation.canonical_result.first_observed_at,
+        achievement=final_achievement,
+    )
+
+    def queued_delivery(event, status):
+        item = NotificationEndpoint()
+        item.issue_management_token()
+        item.save()
+        return NotificationDelivery.objects.create(
+            event=event,
+            endpoint=item,
+            provider=NotificationProvider.WEBPUSH,
+            status=status,
+        )
+
+    pending = queued_delivery(old_event, NotificationDelivery.Status.PENDING)
+    retry = queued_delivery(current_event, NotificationDelivery.Status.RETRY)
+    sent = queued_delivery(old_event, NotificationDelivery.Status.SENT)
+
+    migration = import_module(
+        "apps.records.migrations.0012_retire_superseded_attempt_results"
+    )
+    migration.retire_superseded_attempt_results(django_apps, None)
+
+    legacy_result.refresh_from_db()
+    legacy_observation.refresh_from_db()
+    legacy_achievement.refresh_from_db()
+    legacy_achievement.qualification.refresh_from_db()
+    pending.refresh_from_db()
+    retry.refresh_from_db()
+    sent.refresh_from_db()
+    assert legacy_result.status == CanonicalResult.Status.RETRACTED
+    assert legacy_observation.status == ResultObservation.Status.RETRACTED
+    assert legacy_achievement.status == Achievement.Status.WITHDRAWN
+    assert legacy_achievement.qualification.show_on_homepage is False
+    assert legacy_achievement.qualification.notification_eligible is False
+    assert pending.status == NotificationDelivery.Status.CANCELLED
+    assert retry.status == NotificationDelivery.Status.CANCELLED
+    assert sent.status == NotificationDelivery.Status.SENT
+
+
+@pytest.mark.django_db
+def test_cubingchina_bogus_wr_claim_is_evidence_not_classification():
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    row = reconcile_result_observation(observed(value=412, claim="WR"))
+
+    row.refresh_from_db()
+    assert row.source_record_tag == "WR"
+    assert row.source_claim_trusted is False
+    assert row.result_evidence_trusted is False
+    assert not Achievement.objects.filter(result=row.canonical_result, type="WR").exists()
+    assert NotificationEvent.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_cubingchina_record_is_classified_without_a_source_label_but_not_published():
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    row = reconcile_result_observation(observed(value=390, claim=""))
+
+    achievement = Achievement.objects.get(result=row.canonical_result, type="WR")
+    assert achievement.classification_reason == "effective_live_benchmark"
+    assert achievement.source_claim_supported is False
+    assert row.canonical_result.validation_status == "pending"
+    assert achievement.qualification.show_on_homepage is False
+    assert achievement.qualification.notification_eligible is False
+
+
+@pytest.mark.django_db
+def test_effective_live_record_replay_handles_later_slower_result():
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    alice_observation = observed(
+        source_result="alice-1",
+        competitor="2020ALICE1",
+        competitor_name="Alice",
+        value=390,
+    )
+    alice = reconcile_result_observation(alice_observation).canonical_result
+    bob = reconcile_result_observation(
+        observed(
+            source_result="bob-1",
+            competitor="2020BOB001",
+            competitor_name="Bob",
+            value=395,
+            observed_at=datetime(2026, 8, 8, 10, 1, tzinfo=UTC),
+        )
+    ).canonical_result
+
+    assert Achievement.objects.filter(result=alice, type="WR", status="active").exists()
+    assert not Achievement.objects.filter(result=bob, type="WR", status="active").exists()
+
+    reconcile_result_observation(replace(alice_observation, value=490))
+    assert not Achievement.objects.filter(result=alice, type="WR", status="active").exists()
+    assert Achievement.objects.filter(result=bob, type="WR", status="active").exists()
+
+
+@pytest.mark.django_db
+def test_pr_progression_uses_effective_personal_best():
+    PersonalBestBaseline.objects.create(
+        competitor_wca_id="2020TEST01", event_id="333", kind="single", value=620
+    )
+    start = datetime(2026, 8, 8, 10, 0, tzinfo=UTC)
+    results = []
+    for index, value in enumerate((610, 615, 602), start=1):
+        results.append(
+            reconcile_result_observation(
+                observed(
+                    method="graphql_subscription",
+                    source="wca_live",
+                    source_result=f"round-result-{index}",
+                    round_number=index,
+                    round_id=f"round-{index}",
+                    value=value,
+                    entered_at=start + timedelta(minutes=index),
+                    observed_at=start + timedelta(minutes=index),
+                )
+            ).canonical_result
+        )
+
+    assert [
+        Achievement.objects.filter(result=result, type="PR", status="active").exists()
+        for result in results
+    ] == [True, False, True]
+
+
+@pytest.mark.django_db
+def test_one_result_retains_all_achievements_with_homepage_precedence(
+    django_capture_on_commit_callbacks,
+):
+    for level, region in (("WR", ""), ("CR", "Europe"), ("NR", "NL")):
+        RecordBenchmark.objects.create(
+            level=level,
+            event_id="333",
+            kind="single",
+            region_code=region,
+            value=400,
+        )
+    PersonalBestBaseline.objects.create(
+        competitor_wca_id="2020TEST01", event_id="333", kind="single", value=410
+    )
+    with django_capture_on_commit_callbacks(execute=True):
+        result = reconcile_result_observation(
+            observed(
+                method="graphql_subscription",
+                source="wca_live",
+                value=390,
+                claim="WR",
+            )
+        ).canonical_result
+
+    achievements = Achievement.objects.filter(result=result, status="active")
+    assert set(achievements.values_list("type", flat=True)) == {"WR", "CR", "NR", "PR"}
+    assert set(
+        achievements.filter(qualification__show_on_homepage=True).values_list("type", flat=True)
+    ) == {"WR"}
+    assert set(
+        achievements.filter(qualification__notification_eligible=True).values_list(
+            "type", flat=True
+        )
+    ) == {"WR"}
+    assert NotificationEvent.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_correction_updates_same_identity_and_replays_record_state():
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    original_observation = observed(value=390)
+    first = reconcile_result_observation(original_observation)
+    result_id = first.canonical_result_id
+    assert Achievement.objects.filter(result_id=result_id, type="WR", status="active").exists()
+
+    corrected = reconcile_result_observation(replace(original_observation, value=490))
+    corrected.canonical_result.refresh_from_db()
+    assert corrected.canonical_result_id == result_id
+    assert corrected.canonical_result.revision == 2
+    assert corrected.canonical_result.status == "corrected"
+    assert not Achievement.objects.filter(result_id=result_id, type="WR", status="active").exists()
+
+
+@pytest.mark.django_db
+def test_trusted_source_disagreement_blocks_qualification():
+    api = observed(
+        method="api_polling",
+        source="wca_live",
+        source_result="wca-result-1",
+        value=390,
+        claim="WR",
+    )
+    ws = replace(
+        api,
+        ingestion_method="graphql_subscription",
+        value=395,
+        observed_at=api.observed_at + timedelta(seconds=3),
+    )
+    reconcile_result_observation(api)
+    row = reconcile_result_observation(ws)
+    row.canonical_result.refresh_from_db()
+
+    assert CanonicalResult.objects.count() == 1
+    assert row.canonical_result.validation_status == "rejected"
+    assert row.canonical_result.validation_reason == "trusted_source_disagreement"
+    assert not Achievement.objects.filter(status="active").exists()
+
+
+@pytest.mark.django_db
+def test_reconciliation_is_database_idempotent():
+    item = observed(
+        method="api_polling",
+        source="wca_live",
+        source_result="wca-result-1",
+        value=390,
+        claim="WR",
+    )
+    first = reconcile_result_observation(item)
+    second = reconcile_result_observation(item)
+    assert first.pk == second.pk
+    assert CanonicalResult.objects.count() == 1
+    assert ResultObservation.objects.count() == 1
+    assert Achievement.objects.filter(type="WR", status="active").count() == 1
+
+
+@pytest.mark.django_db
+def test_same_round_level_claim_from_two_methods_has_one_identity():
+    api = observed(
+        method="api_polling",
+        source="wca_live",
+        source_result="wca-result-1",
+        value=390,
+        claim="WR",
+    )
+    subscription = replace(
+        api,
+        ingestion_method="graphql_subscription",
+        observed_at=api.observed_at + timedelta(seconds=1),
+    )
+
+    api_row = reconcile_result_observation(api)
+    subscription_row = reconcile_result_observation(subscription)
+
+    assert api_row.canonical_result_id == subscription_row.canonical_result_id
+    assert CanonicalResult.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_fallback_identity_is_promoted_when_the_wca_id_arrives_later():
+    anonymous = observed(competitor="", source_result="provider-result-1")
+    first = reconcile_result_observation(anonymous)
+    original_id = first.canonical_result_id
+    assert first.canonical_result.identity_key.startswith("source|")
+
+    identified = replace(
+        anonymous,
+        competitor_wca_id="2020TEST01",
+        observed_at=anonymous.observed_at + timedelta(seconds=1),
+    )
+    second = reconcile_result_observation(identified)
+    second.canonical_result.refresh_from_db()
+
+    assert second.canonical_result_id == original_id
+    assert second.canonical_result.identity_key == ("wca|TESTOPEN2026|2020TEST01|333|1|single")
+    assert CanonicalResult.objects.count() == 1
+
+
+def wca_records_payload(*, world=400, europe=410, netherlands=420):
+    return {
+        "world_records": {"333": {"single": world}},
+        "continental_records": {"_Europe": {"333": {"single": europe}}},
+        "national_records": {"Netherlands": {"333": {"single": netherlands}}},
+    }
+
+
+def test_wca_records_parser_normalizes_all_three_official_scopes():
+    parsed = parse_wca_records(wca_records_payload())
+    assert parsed.records == {
+        "WR|333|single|": 400,
+        "CR|333|single|_Europe": 410,
+        "NR|333|single|Netherlands": 420,
+    }
+
+
+@pytest.mark.django_db
+def test_cubingchina_result_is_independently_validated_and_published(
+    django_capture_on_commit_callbacks,
+):
+    with django_capture_on_commit_callbacks(execute=True):
+        refresh_wca_record_validations(
+            wca_records_payload(),
+            source_url="https://www.worldcubeassociation.org/api/v0/records",
+        )
+        row = reconcile_result_observation(observed(value=390, claim=""))
 
     result = row.canonical_result
-    assert result.revisions.count() == 1
-    revision = result.revisions.get()
-    assert revision.value == 900
-    assert revision.action == CanonicalResultRevision.Action.ACTIVE
-    assert ClassificationWork.objects.filter(canonical_result=result).count() == 1
-    assert not hasattr(result, "processing_action")
-    revision.value = 800
-    with pytest.raises(ValidationError, match="immutable"):
-        revision.save()
+    result.refresh_from_db()
+    assert result.validation_status == "verified"
+    assert result.validation_reason == "wca_records_api_record_match"
+    assert set(
+        result.record_validations.filter(status="verified").values_list("level", flat=True)
+    ) == {"WR", "CR", "NR"}
+    achievement = Achievement.objects.get(result=result, type="WR")
+    assert achievement.classification_reason == "wca_records_api_validation"
+    assert achievement.qualification.show_on_homepage is True
+    assert achievement.qualification.notification_eligible is True
 
 
 @pytest.mark.django_db
-def test_provider_record_tag_change_does_not_create_classifier_work():
-    data = observed(claim="NR")
-    row = reconcile_result_observation(data)
-    reconcile_result_observation(
-        replace(data, source_record_tag="WR", observed_at=NOW + timedelta(seconds=1))
+def test_wca_snapshot_equality_still_validates_after_official_record_updates():
+    refresh_wca_record_validations(
+        wca_records_payload(world=390),
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
     )
+    result = reconcile_result_observation(observed(value=390)).canonical_result
 
-    assert row.canonical_result.revisions.count() == 1
-    assert ClassificationWork.objects.count() == 1
+    validation = RecordValidation.objects.get(result=result, level="WR")
+    achievement = Achievement.objects.get(result=result, type="WR")
+    assert validation.status == "verified"
+    assert validation.result_value == validation.benchmark_value == 390
+    assert achievement.qualification.show_on_homepage is True
 
 
 @pytest.mark.django_db
-def test_revision_work_stays_pending_until_an_active_baseline_exists():
-    reconcile_result_observation(observed())
-
-    assert claim_next_work("worker") is None
-    assert ClassificationWork.objects.get().status == "pending"
-
-
-@pytest.mark.django_db
-def test_wca_validation_refresh_creates_revisions_without_trusting_provider_tags():
-    matching = reconcile_result_observation(
-        observed(
-            source_result="matching",
-            competitor="2020MATCH01",
-            value=900,
-            source="cubingchina",
-            ingestion_method="cubingchina_websocket",
-        )
+def test_unchanged_wca_snapshot_does_not_redirty_classification_scopes():
+    payload = wca_records_payload()
+    reconcile_result_observation(observed(value=390), defer_classification=True)
+    refresh_wca_record_validations(
+        payload,
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
     )
-    mismatching = reconcile_result_observation(
-        observed(
-            source_result="mismatching",
-            competitor="2020MISS01",
-            value=1100,
-            claim="WR",
-            source="cubingchina",
-            ingestion_method="cubingchina_websocket",
-        )
-    )
+    work = ClassificationScopeWork.objects.get(event_id="333", kind="single")
+    requested_version = work.requested_version
 
     refresh_wca_record_validations(
-        {
-            "world_records": {"333": {"single": 1000}},
-            "continental_records": {"_Europe": {"333": {"single": 1000}}},
-            "national_records": {"Netherlands": {"333": {"single": 1000}}},
-        },
-        source_url="https://example.test/api/v0/records",
+        payload,
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
     )
 
-    matching.canonical_result.refresh_from_db()
-    mismatching.canonical_result.refresh_from_db()
-    assert matching.canonical_result.validation_status == "verified"
-    assert matching.canonical_result.revision == 2
-    assert mismatching.canonical_result.validation_status == "pending"
-    assert mismatching.canonical_result.validation_reason == "wca_records_api_no_record_match"
-    assert mismatching.canonical_result.revision == 2
-    assert ClassificationWork.objects.count() == 4
+    work.refresh_from_db()
+    assert work.requested_version == requested_version
+    assert WCARecordSnapshot.objects.count() == 1
 
 
 @pytest.mark.django_db
-def test_missing_competition_timezone_is_flagged_instead_of_guessed():
-    row = reconcile_result_observation(
-        replace(observed(), competition_timezone="", competition_local_date=None)
+def test_wca_snapshot_dirties_only_added_changed_or_removed_scopes():
+    reconcile_result_observation(observed(value=390), defer_classification=True)
+    result_222 = replace(
+        observed(source_result="source-result-222", value=90),
+        event_id="222",
+        event_name="2x2x2 Cube",
     )
-
-    revision = row.canonical_result.revisions.get()
-    assert revision.competition_local_date is None
-    assert revision.timezone_resolution_status == "unresolved"
-    assert revision.timezone_resolution_reason == "missing_or_ambiguous_source_timezone"
-
-
-@pytest.mark.django_db
-def test_normal_single_classifies_all_four_levels_independently_and_ignores_tags():
-    seed_baseline(people=("2020TEST01",))
-    row = reconcile_result_observation(observed(value=900, claim=""))
-    settle()
-
-    processed = ProcessedResult.objects.get(canonical_result=row.canonical_result)
-    assert set(
-        processed.record_levels.values_list("record_level", "classification_outcome")
-    ) == {("WR", "broken"), ("CR", "broken"), ("NR", "broken"), ("PR", "broken")}
-    assert LiveRecordsSingle.objects.get(record_holder="World").event_333 == 900
-    assert processed.competition_local_date == date(2026, 8, 8)
-
-
-@pytest.mark.django_db
-def test_non_record_still_creates_processed_result_and_average_uses_average_table():
-    seed_baseline(kind="average", value=800, people=("2020TEST01",))
-    row = reconcile_result_observation(observed(kind="average", value=900, claim="WR"))
-    settle()
-
-    processed = ProcessedResult.objects.get(canonical_result=row.canonical_result)
-    assert set(processed.record_levels.values_list("classification_outcome", flat=True)) == {
-        "none"
+    reconcile_result_observation(result_222, defer_classification=True)
+    initial = wca_records_payload()
+    initial["world_records"]["222"] = {"single": 90}
+    refresh_wca_record_validations(
+        initial,
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    versions = {
+        (row.event_id, row.kind): row.requested_version
+        for row in ClassificationScopeWork.objects.all()
     }
-    assert LiveRecordsAverage.objects.get(record_holder="World").event_333 == 800
+
+    changed = wca_records_payload(world=380)
+    changed["world_records"]["222"] = {"single": 90}
+    refresh_wca_record_validations(
+        changed,
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+
+    assert (
+        ClassificationScopeWork.objects.get(event_id="333", kind="single").requested_version
+        == versions[("333", "single")] + 1
+    )
+    assert (
+        ClassificationScopeWork.objects.get(event_id="222", kind="single").requested_version
+        == versions[("222", "single")]
+    )
+
+    removed = wca_records_payload(world=380)
+    refresh_wca_record_validations(
+        removed,
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+
+    assert (
+        ClassificationScopeWork.objects.get(event_id="222", kind="single").requested_version
+        == versions[("222", "single")] + 1
+    )
 
 
 @pytest.mark.django_db
-def test_encoded_multi_blind_uses_lower_numeric_value_as_better():
-    activate_baseline()
-    baseline = 970010001
-    for holder, record_type in (
-        ("World", "WR"),
-        ("Europe", "CR"),
-        ("Netherlands", "NR"),
-        ("2020TEST01", "PR"),
-    ):
-        BaselineRecordsSingle.objects.create(
-            record_holder=holder,
-            record_type=record_type,
-            event_333mbf=baseline,
-        )
-    seed_live_records_from_baseline()
-    row = reconcile_result_observation(
-        observed(
-            event_id="333mbf",
-            event_name="3x3x3 Multi-Blind",
-            value=960010001,
-        )
+def test_wca_scope_validation_uses_exists_without_multiplying_joins():
+    refresh_wca_record_validations(
+        wca_records_payload(),
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
     )
-    settle()
+    reconcile_result_observation(observed(value=390))
 
-    processed = ProcessedResult.objects.get(canonical_result=row.canonical_result)
-    assert set(processed.record_levels.values_list("classification_outcome", flat=True)) == {
-        "broken"
-    }
-    assert LiveRecordsSingle.objects.get(
-        record_holder="World", record_type="WR"
-    ).event_333mbf == 960010001
+    with CaptureQueriesContext(connection) as queries:
+        assert validate_scope_against_latest_snapshot("333", "single") == 1
+
+    sql = "\n".join(query["sql"] for query in queries.captured_queries)
+    assert "EXISTS" in sql
+    assert "LEFT OUTER JOIN" not in sql
 
 
 @pytest.mark.django_db
-def test_equal_record_is_tied_and_marks_both_holders_as_shared():
-    seed_baseline(people=("2020ALIC01", "2020BOBB01"))
-    reconcile_result_observation(
-        observed(source_result="alice", competitor="2020ALIC01", value=900)
-    )
-    settle()
-    reconcile_result_observation(
-        observed(
-            source_result="bob",
-            competitor="2020BOBB01",
-            value=900,
-            entered_at=NOW + timedelta(minutes=1),
-            observed_at=NOW + timedelta(minutes=1),
-        )
-    )
-    settle()
-
-    wrs = ProcessedResultRecordLevel.objects.filter(record_level="WR").order_by(
-        "processed_result__classification_at"
-    )
-    assert list(wrs.values_list("classification_outcome", flat=True)) == ["broken", "tied"]
-    assert set(wrs.values_list("is_shared_tie", flat=True)) == {True}
-    assert set(wrs.values_list("recognition_status", flat=True)) == {"recognized"}
-    for record_level in ("CR", "NR"):
-        rows = ProcessedResultRecordLevel.objects.filter(
-            record_level=record_level
-        ).order_by("processed_result__classification_at")
-        assert list(rows.values_list("classification_outcome", flat=True)) == [
-            "broken",
-            "tied",
-        ]
-        assert set(rows.values_list("is_shared_tie", flat=True)) == {True}
-
-
-@pytest.mark.django_db
-def test_equal_personal_record_across_competitions_is_a_recognized_shared_tie():
-    seed_baseline(people=("2020ALIC01",))
-    reconcile_result_observation(
-        observed(source_result="alice-one", competitor="2020ALIC01", value=900)
-    )
-    settle()
-    reconcile_result_observation(
-        observed(
-            source_result="alice-two",
-            competition="OtherOpen2026",
-            competition_name="Other Open",
-            competitor="2020ALIC01",
-            round_id="other-round",
-            value=900,
-            entered_at=NOW + timedelta(minutes=1),
-            observed_at=NOW + timedelta(minutes=1),
-        )
-    )
-    settle()
-
-    personal = ProcessedResultRecordLevel.objects.filter(record_level="PR").order_by(
-        "processed_result__classification_at"
-    )
-    assert list(personal.values_list("classification_outcome", flat=True)) == [
-        "broken",
-        "tied",
-    ]
-    assert set(personal.values_list("recognition_status", flat=True)) == {"recognized"}
-    assert set(personal.values_list("is_shared_tie", flat=True)) == {True}
-
-
-@pytest.mark.django_db
-def test_same_round_supersession_is_per_level_and_pr_remains_recognized():
-    seed_baseline(people=("2020ALIC01", "2020BOBB01"))
+def test_wca_scope_validation_commits_completed_batches(settings, monkeypatch):
     first = reconcile_result_observation(
-        observed(source_result="alice", competitor="2020ALIC01", value=950)
+        observed(source_result="batch-result-1", competitor="2026BATCH01", value=390),
+        defer_classification=True,
+    ).canonical_result
+    second = reconcile_result_observation(
+        observed(source_result="batch-result-2", competitor="2026BATCH02", value=395),
+        defer_classification=True,
+    ).canonical_result
+    refresh_wca_record_validations(
+        wca_records_payload(),
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
     )
-    settle()
-    reconcile_result_observation(
-        observed(
-            source_result="bob",
-            competitor="2020BOBB01",
-            value=920,
-            entered_at=NOW + timedelta(minutes=1),
-            observed_at=NOW + timedelta(minutes=1),
-        )
-    )
-    settle()
+    settings.WCA_RECORD_VALIDATION_BATCH_SIZE = 1
+    original = record_validation._validate_scope_batch
+    calls = 0
 
-    old = ProcessedResult.objects.get(canonical_result=first.canonical_result)
-    assert level(old, "NR").recognition_status == "superseded_same_round"
-    assert level(old, "NR").currently_holds is False
-    assert level(old, "PR").recognition_status == "recognized"
-    assert level(old, "PR").currently_holds is True
+    def fail_second_batch(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("simulated batch interruption")
+        return original(*args, **kwargs)
 
+    monkeypatch.setattr(record_validation, "_validate_scope_batch", fail_second_batch)
 
-@pytest.mark.django_db
-def test_same_day_supersession_crosses_competitions_and_round_precedes_day():
-    seed_baseline(people=("2020ALIC01", "2020BOBB01", "2020CARA01"))
-    first = reconcile_result_observation(
-        observed(source_result="alice", competitor="2020ALIC01", value=950)
-    )
-    settle()
-    middle = reconcile_result_observation(
-        observed(
-            source_result="bob",
-            competition="OtherOpen2026",
-            competition_name="Other Open",
-            competitor="2020BOBB01",
-            round_id="other-round",
-            value=930,
-            entered_at=NOW + timedelta(hours=1),
-            observed_at=NOW + timedelta(hours=1),
-        )
-    )
-    settle()
-    third = reconcile_result_observation(
-        observed(
-            source_result="cara",
-            competitor="2020CARA01",
-            value=920,
-            entered_at=NOW + timedelta(hours=2),
-            observed_at=NOW + timedelta(hours=2),
-        )
-    )
-    settle()
+    with pytest.raises(RuntimeError, match="simulated batch interruption"):
+        validate_scope_against_latest_snapshot("333", "single")
 
-    old = ProcessedResult.objects.get(canonical_result=first.canonical_result)
-    same_day = ProcessedResult.objects.get(canonical_result=middle.canonical_result)
-    newest = ProcessedResult.objects.get(canonical_result=third.canonical_result)
-    assert level(old, "WR").recognition_status == "superseded_same_round"
-    assert level(same_day, "WR").recognition_status == "superseded_same_day"
-    assert level(newest, "WR").recognition_status == "recognized"
-
-
-@pytest.mark.django_db
-def test_same_day_supersession_applies_across_rounds_for_the_same_person():
-    seed_baseline(people=("2020ALIC01",))
-    first = reconcile_result_observation(
-        observed(source_result="round-one", competitor="2020ALIC01", value=950)
-    )
-    settle()
-    reconcile_result_observation(
-        observed(
-            source_result="round-two",
-            competitor="2020ALIC01",
-            round_number=2,
-            round_id="round-2",
-            value=920,
-            entered_at=NOW + timedelta(hours=1),
-            observed_at=NOW + timedelta(hours=1),
-        )
-    )
-    settle()
-
-    old = ProcessedResult.objects.get(canonical_result=first.canonical_result)
-    for record_level in ("WR", "CR", "NR", "PR"):
-        assert level(old, record_level).recognition_status == "superseded_same_day"
-
-
-@pytest.mark.django_db
-def test_legitimate_later_record_has_ceased_holding_reason():
-    seed_baseline(people=("2020ALIC01", "2020BOBB01"))
-    first = reconcile_result_observation(
-        observed(source_result="alice", competitor="2020ALIC01", value=950)
-    )
-    settle()
-    reconcile_result_observation(
-        observed(
-            source_result="bob",
-            competition="LaterOpen2026",
-            competition_name="Later Open",
-            competitor="2020BOBB01",
-            round_id="later-round",
-            value=920,
-            entered_at=NOW + timedelta(days=12),
-            observed_at=NOW + timedelta(days=12),
-        )
-    )
-    settle()
-
-    old_wr = level(ProcessedResult.objects.get(canonical_result=first.canonical_result), "WR")
-    assert old_wr.recognition_status == "recognized"
-    assert old_wr.currently_holds is False
-    assert old_wr.ceased_holding_reason == "broken_by_other_other_competition"
-    assert old_wr.ceased_holding_by is not None
+    assert calls == 2
+    assert first.record_validations.count() == 3
+    assert second.record_validations.count() == 0
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
-    ("same_person", "same_competition", "expected_reason"),
+    ("country_code", "records_region", "average"),
     [
-        (True, True, "broken_by_self_later_round"),
-        (False, True, "broken_by_other_later_round"),
-        (True, False, "broken_by_self_other_competition"),
-        (False, False, "broken_by_other_other_competition"),
+        ("HK", "Hong Kong", 613),
+        ("MO", "Macau", 778),
+        ("TW", "Taiwan", 701),
+        ("CI", "Cote d_Ivoire", 702),
+        ("KR", "Korea", 703),
+        ("US", "USA", 704),
     ],
 )
-def test_legitimate_later_break_classifies_each_ceased_holding_reason(
-    same_person, same_competition, expected_reason
+def test_records_api_display_name_validates_equal_national_record(
+    country_code, records_region, average
 ):
-    seed_baseline(people=("2020ALIC01", "2020BOBB01"))
-    first = reconcile_result_observation(
-        observed(source_result="first", competitor="2020ALIC01", value=950)
+    refresh_wca_record_validations(
+        {
+            "world_records": {},
+            "continental_records": {},
+            "national_records": {records_region: {"333": {"average": average}}},
+        },
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
     )
-    settle()
-    reconcile_result_observation(
+    result = reconcile_result_observation(
         observed(
-            source_result="later",
-            competition="TestOpen2026" if same_competition else "LaterOpen2026",
-            competition_name="Test Open 2026" if same_competition else "Later Open",
-            competitor="2020ALIC01" if same_person else "2020BOBB01",
-            round_number=2,
-            round_id="round-2",
-            value=920,
-            entered_at=NOW + timedelta(days=2),
-            observed_at=NOW + timedelta(days=2),
+            value=average,
+            country_code=country_code,
+            kind="average",
+            claim="NR",
         )
-    )
-    settle()
+    ).canonical_result
 
-    old_wr = level(ProcessedResult.objects.get(canonical_result=first.canonical_result), "WR")
-    assert old_wr.recognition_status == "recognized"
-    assert old_wr.ceased_holding_reason == expected_reason
+    validation = RecordValidation.objects.get(result=result, level="NR")
+    achievement = Achievement.objects.get(result=result, type="NR")
+    assert validation.region_code == records_region
+    assert validation.status == "verified"
+    assert validation.result_value == validation.benchmark_value == average
+    assert achievement.qualification.show_on_homepage is True
 
 
 @pytest.mark.django_db
-def test_slower_correction_preserves_invalid_history_and_repairs_live_state():
-    seed_baseline(people=("2020TEST01",))
-    data = observed(value=900)
-    row = reconcile_result_observation(data)
-    settle()
-    reconcile_result_observation(
-        replace(data, value=1100, observed_at=NOW + timedelta(minutes=1))
+def test_cubingchina_bogus_claim_is_rejected_by_official_record_snapshot():
+    refresh_wca_record_validations(
+        {
+            "world_records": {"333": {"single": 400}},
+            "continental_records": {},
+            "national_records": {},
+        },
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
     )
-    settle()
+    result = reconcile_result_observation(observed(value=412, claim="WR")).canonical_result
+    result.refresh_from_db()
 
-    rows = list(
-        ProcessedResult.objects.filter(canonical_result=row.canonical_result).order_by(
-            "canonical_revision"
-        )
-    )
-    assert len(rows) == 2
-    assert rows[0].is_valid_result is False
-    assert rows[0].invalidity_reason == "corrected_result"
-    assert level(rows[0], "WR").classification_outcome == "broken"
-    assert level(rows[0], "WR").currently_holds is False
-    assert rows[1].is_valid_result is True
-    assert level(rows[1], "WR").classification_outcome == "none"
-    assert LiveRecordsSingle.objects.get(record_holder="World").event_333 == 1000
-
-
-@pytest.mark.django_db
-def test_faster_correction_turns_a_non_record_into_a_record():
-    seed_baseline(people=("2020TEST01",))
-    data = observed(value=1100)
-    row = reconcile_result_observation(data)
-    settle()
-    reconcile_result_observation(
-        replace(data, value=900, observed_at=NOW + timedelta(minutes=1))
-    )
-    settle()
-
-    old, new = ProcessedResult.objects.filter(
-        canonical_result=row.canonical_result
-    ).order_by("canonical_revision")
-    assert old.is_valid_result is False
-    assert level(old, "WR").classification_outcome == "none"
-    assert new.is_valid_result is True
-    assert level(new, "WR").classification_outcome == "broken"
-    assert LiveRecordsSingle.objects.get(record_holder="World").event_333 == 900
-
-
-@pytest.mark.django_db
-def test_scope_changing_correction_repairs_old_and_new_country_continent_scopes():
-    seed_two_country_baseline(people=("2020TEST01",))
-    data = observed(value=900, country_code="NL")
-    reconcile_result_observation(data)
-    settle()
-    reconcile_result_observation(
-        replace(
-            data,
-            value=850,
-            country_code="AR",
-            observed_at=NOW + timedelta(minutes=1),
-        )
-    )
-    settle()
-
-    assert LiveRecordsSingle.objects.get(
-        record_holder="Netherlands", record_type="NR"
-    ).event_333 == 1000
-    assert LiveRecordsSingle.objects.get(
-        record_holder="Europe", record_type="CR"
-    ).event_333 == 1000
-    assert LiveRecordsSingle.objects.get(
-        record_holder="Argentina", record_type="NR"
-    ).event_333 == 850
-    assert LiveRecordsSingle.objects.get(
-        record_holder="South America", record_type="CR"
-    ).event_333 == 850
-
-
-@pytest.mark.django_db
-def test_retraction_reinstates_earlier_same_round_result():
-    seed_baseline(people=("2020ALIC01", "2020BOBB01"))
-    alice = reconcile_result_observation(
-        observed(source_result="alice", competitor="2020ALIC01", value=950)
-    )
-    settle()
-    bob = reconcile_result_observation(
-        observed(
-            source_result="bob",
-            competitor="2020BOBB01",
-            value=920,
-            entered_at=NOW + timedelta(minutes=1),
-            observed_at=NOW + timedelta(minutes=1),
-        )
-    )
-    settle()
-    retract_result_observation(bob.observation_key, NOW + timedelta(minutes=2))
-    settle()
-
-    alice_processed = ProcessedResult.objects.get(canonical_result=alice.canonical_result)
-    assert level(alice_processed, "WR").recognition_status == "recognized"
-    assert level(alice_processed, "WR").currently_holds is True
-    assert LiveRecordsSingle.objects.get(record_holder="World").event_333 == 950
-    assert ProcessedResult.objects.filter(
-        canonical_result=bob.canonical_result,
-        invalidity_reason="retracted_result",
-    ).exists()
-
-
-@pytest.mark.django_db
-def test_retraction_reinstates_earlier_same_day_personal_record():
-    seed_baseline(people=("2020ALIC01",))
-    alice = reconcile_result_observation(
-        observed(source_result="alice-one", competitor="2020ALIC01", value=950)
-    )
-    settle()
-    later = reconcile_result_observation(
-        observed(
-            source_result="alice-two",
-            competition="OtherOpen2026",
-            competition_name="Other Open",
-            competitor="2020ALIC01",
-            round_id="other-round",
-            value=920,
-            entered_at=NOW + timedelta(hours=1),
-            observed_at=NOW + timedelta(hours=1),
-        )
-    )
-    settle()
-    first = ProcessedResult.objects.get(canonical_result=alice.canonical_result)
-    assert level(first, "PR").recognition_status == "superseded_same_day"
-
-    retract_result_observation(later.observation_key, NOW + timedelta(hours=2))
-    settle()
-
-    level(first, "PR").refresh_from_db()
-    assert level(first, "PR").recognition_status == "recognized"
-    assert level(first, "PR").currently_holds is True
-
-
-@pytest.mark.django_db
-def test_out_of_order_arrival_repairs_history_and_final_live_value():
-    seed_baseline(people=("2020ALIC01", "2020BOBB01"))
-    bob = reconcile_result_observation(
-        observed(
-            source_result="bob",
-            competitor="2020BOBB01",
-            value=880,
-            entered_at=NOW + timedelta(hours=1),
-            observed_at=NOW + timedelta(hours=1),
-        )
-    )
-    settle()
-    alice = reconcile_result_observation(
-        observed(source_result="alice", competitor="2020ALIC01", value=900)
-    )
-    settle()
-
-    assert level(ProcessedResult.objects.get(canonical_result=alice.canonical_result), "WR").classification_outcome == "broken"
-    assert level(ProcessedResult.objects.get(canonical_result=bob.canonical_result), "WR").classification_outcome == "broken"
-    assert LiveRecordsSingle.objects.get(record_holder="World").event_333 == 880
-
-
-@pytest.mark.django_db(transaction=True)
-def test_revisions_are_claimed_in_order_and_stale_revision_cannot_update_live_state():
-    seed_baseline(people=("2020TEST01",))
-    data = observed(value=900)
-    reconcile_result_observation(data)
-    reconcile_result_observation(
-        replace(data, value=850, observed_at=NOW + timedelta(seconds=1))
-    )
-
-    first = claim_next_work("worker")
-    assert first.revision == 1
-    assert process_claimed_work(first, "worker") is True
-    assert ClassificationWork.objects.get(pk=first.work_id).status == "stale"
-    assert LiveRecordsSingle.objects.get(record_holder="World").event_333 == 1000
+    assert result.validation_status == "rejected"
+    assert result.validation_reason == "wca_records_api_record_mismatch"
+    assert RecordValidation.objects.get(result=result, level="WR").status == "rejected"
+    assert not Achievement.objects.filter(result=result, type="WR", status="active").exists()
     assert NotificationEvent.objects.count() == 0
 
-    second = claim_next_work("worker")
-    assert second.revision == 2
-    process_claimed_work(second, "worker")
-    assert LiveRecordsSingle.objects.get(record_holder="World").event_333 == 850
 
+@pytest.mark.django_db
+def test_official_level_rejection_overrides_stale_higher_live_baselines():
+    for level, region in (("WR", ""), ("CR", "Europe"), ("NR", "NL")):
+        RecordBenchmark.objects.create(
+            level=level,
+            event_id="333",
+            kind="single",
+            region_code=region,
+            value=500,
+        )
+    refresh_wca_record_validations(
+        wca_records_payload(world=400, europe=410, netherlands=420),
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    result = reconcile_result_observation(observed(value=412)).canonical_result
 
-@pytest.mark.django_db(transaction=True)
-def test_failed_work_retries_idempotently(monkeypatch):
-    seed_baseline(people=("2020TEST01",))
-    reconcile_result_observation(observed(value=900))
-    original = classification_work.classify_revision
-    calls = 0
-
-    def classify_then_fail_once(revision):
-        nonlocal calls
-        calls += 1
-        current = original(revision, publish_notifications=False)
-        if calls == 1:
-            raise RuntimeError("worker interrupted after classification")
-        return current
-
-    monkeypatch.setattr(classification_work, "classify_revision", classify_then_fail_once)
-    first = claim_next_work("worker")
-    assert process_claimed_work(first, "worker") is False
-    assert ClassificationWork.objects.get(pk=first.work_id).status == "failed"
-    assert ProcessedResult.objects.count() == 1
-    assert ProcessedResultRecordLevel.objects.count() == 4
-
-    retry = claim_next_work("worker")
-    assert retry.work_id == first.work_id
-    assert process_claimed_work(retry, "worker") is True
-    work = ClassificationWork.objects.get(pk=retry.work_id)
-    assert work.status == "completed"
-    assert work.attempts == 2
-    assert ProcessedResult.objects.count() == 1
-    assert ProcessedResultRecordLevel.objects.count() == 4
-    assert LiveRecordsSingle.objects.get(record_holder="World").event_333 == 900
+    assert set(
+        Achievement.objects.filter(result=result, status="active").values_list("type", flat=True)
+    ) == {"NR"}
+    assert Achievement.objects.get(result=result, type="NR").qualification.show_on_homepage
 
 
 @pytest.mark.django_db
-def test_incremental_state_matches_clean_rebuild():
-    seed_baseline(people=("2020ALIC01", "2020BOBB01"))
-    reconcile_result_observation(
-        observed(source_result="alice", competitor="2020ALIC01", value=930)
+def test_wca_snapshots_are_content_deduplicated_but_rechecked():
+    payload = wca_records_payload()
+    refresh_wca_record_validations(
+        payload, source_url="https://www.worldcubeassociation.org/api/v0/records"
     )
-    settle()
-    reconcile_result_observation(
+    refresh_wca_record_validations(
+        payload, source_url="https://www.worldcubeassociation.org/api/v0/records"
+    )
+    assert WCARecordSnapshot.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_deferred_reconciliation_is_classified_once_by_durable_scope_worker():
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    item = observed(
+        method="graphql_subscription",
+        source="wca_live",
+        value=390,
+        claim="WR",
+    )
+    row = reconcile_result_observation(item, defer_classification=True)
+
+    assert not Achievement.objects.filter(result=row.canonical_result).exists()
+    assert (
+        mark_classification_scopes_dirty(
+            {("333", "single")},
+            observed_at=item.observed_at,
+            debounce_seconds=0,
+        )
+        == 1
+    )
+    work = ClassificationScopeWork.objects.get(event_id="333", kind="single")
+    assert work.requested_version == 1
+    assert work.processed_version == 0
+
+    assert process_ready_scopes(worker_identity(), limit=1) == 1
+
+    work.refresh_from_db()
+    assert work.requested_version == work.processed_version == 1
+    assert work.dirty_since is None
+    assert work.last_result_count == 1
+    achievement = Achievement.objects.get(result=row.canonical_result, type="WR")
+    assert achievement.qualification.notification_eligible is True
+
+
+@pytest.mark.django_db
+def test_scope_worker_can_immediately_reclaim_its_own_interrupted_lease():
+    mark_classification_scopes_dirty(
+        {("333", "single")},
+        debounce_seconds=0,
+    )
+    worker_id = worker_identity()
+
+    first_claim = claim_next_scope(worker_id)
+    repeated_claim = claim_next_scope(worker_id)
+
+    assert first_claim is not None
+    assert repeated_claim is not None
+    assert repeated_claim.work_id == first_claim.work_id
+
+
+@pytest.mark.django_db
+def test_scope_classification_query_count_is_bounded_across_a_large_burst(
+    django_assert_max_num_queries,
+):
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=1000
+    )
+    for index in range(50):
+        reconcile_result_observation(
+            observed(
+                method="graphql_subscription",
+                source="wca_live",
+                source_result=f"burst-result-{index}",
+                competitor=f"2026TEST{index:02d}",
+                value=900 - index,
+                claim="WR",
+            ),
+            defer_classification=True,
+        )
+
+    with django_assert_max_num_queries(20):
+        reclassify_scope("333", "single")
+
+    assert Achievement.objects.filter(type="WR", status="active").count() == 50
+
+
+@pytest.mark.django_db
+def test_scope_worker_removes_stale_validation_after_source_retraction():
+    refresh_wca_record_validations(
+        wca_records_payload(),
+        source_url="https://www.worldcubeassociation.org/api/v0/records",
+    )
+    item = observed(value=390)
+    row = reconcile_result_observation(item, defer_classification=True)
+    mark_classification_scopes_dirty(
+        {("333", "single")},
+        observed_at=item.observed_at,
+        debounce_seconds=0,
+    )
+    worker_id = worker_identity()
+    assert process_ready_scopes(worker_id, limit=1) == 1
+    assert RecordValidation.objects.filter(result=row.canonical_result).exists()
+
+    retracted_at = item.observed_at + timedelta(seconds=1)
+    assert retract_result_observation(
+        item.observation_key,
+        retracted_at,
+        defer_classification=True,
+    )
+    mark_classification_scopes_dirty(
+        {("333", "single")},
+        observed_at=retracted_at,
+        debounce_seconds=0,
+    )
+    assert process_ready_scopes(worker_id, limit=1) == 1
+
+    assert not RecordValidation.objects.filter(result=row.canonical_result).exists()
+    assert not Achievement.objects.filter(result=row.canonical_result, status="active").exists()
+
+
+@pytest.mark.django_db
+def test_finalized_backfill_rebuilds_two_facts_without_publishing_notifications():
+    round_target = SubscriptionRound.objects.create(
+        round_id="backfill-round-1",
+        wca_live_competition_id="live-competition-1",
+        wca_competition_id="TestOpen2026",
+        competition_name="Test Open 2026",
+        competition_country_code="ES",
+        competition_start_date=date(2026, 8, 8),
+        competition_end_date=date(2026, 8, 9),
+        event_id="333",
+        event_name="3x3x3 Cube",
+        round_number=1,
+        round_name="Final",
+        format_id="a",
+        expected_attempts=5,
+    )
+    observed_at = datetime(2026, 8, 8, 10, 0, tzinfo=UTC)
+    WCALiveDiffTable.objects.create(
+        round=round_target,
+        result_id="backfill-result-1",
+        stable_result_identity="backfill-result-1",
+        competitor_wca_live_id="person-1",
+        competitor_wca_id="2020TEST01",
+        competitor_name="Test Cuber",
+        country_code="NL",
+        attempts=[390, 410, 420, 400, -1],
+        best=390,
+        average=410,
+        single_record_tag="WR",
+        average_record_tag="",
+        meaningful_hash="backfill-hash",
+        normalized_payload={"attempts": [390, 410, 420, 400, -1]},
+        first_observed_at=observed_at,
+        last_observed_at=observed_at,
+        processed_at=observed_at,
+    )
+    RecordBenchmark.objects.create(
+        level="WR", event_id="333", kind="single", region_code="", value=400
+    )
+    old_observation = reconcile_result_observation(
         observed(
-            source_result="bob",
-            competitor="2020BOBB01",
-            value=900,
-            entered_at=NOW + timedelta(days=1),
-            observed_at=NOW + timedelta(days=1),
+            method="graphql_subscription",
+            source="wca_live",
+            source_result="old-attempt-result",
+            value=395,
+            claim="WR",
         )
     )
-    settle()
-    before_live = list(
-        LiveRecordsSingle.objects.order_by("record_holder").values(
-            "record_holder", "record_type", "event_333"
-        )
+    old_achievement = Achievement.objects.get(
+        result=old_observation.canonical_result,
+        type="WR",
     )
-    before_levels = list(
-        ProcessedResultRecordLevel.objects.filter(
-            processed_result__is_valid_result=True
-        )
-        .order_by(
-            "processed_result__canonical_result_id",
-            "processed_result__canonical_revision",
-            "record_level",
-        )
-        .values(
-            "record_level",
-            "classification_outcome",
-            "recognition_status",
-            "currently_holds",
-        )
+    endpoint = NotificationEndpoint()
+    endpoint.issue_management_token()
+    endpoint.save()
+    old_event = NotificationEvent.objects.create(
+        notification_type=NotificationType.RECORD_WR,
+        deduplication_key="old-attempt-achievement",
+        payload={},
+        target_url="/",
+        occurred_at=observed_at,
+        achievement=old_achievement,
+    )
+    old_delivery = NotificationDelivery.objects.create(
+        event=old_event,
+        endpoint=endpoint,
+        provider=NotificationProvider.WEBPUSH,
+        status=NotificationDelivery.Status.RETRY,
     )
 
-    with transaction.atomic():
-        rebuild_classification_from_scratch()
+    call_command("backfill_finalized_results")
+    assert CanonicalResult.objects.filter(pk=old_observation.canonical_result_id).exists()
 
-    assert list(
-        LiveRecordsSingle.objects.order_by("record_holder").values(
-            "record_holder", "record_type", "event_333"
-        )
-    ) == before_live
-    assert list(
-        ProcessedResultRecordLevel.objects.filter(
-            processed_result__is_valid_result=True
-        )
-        .order_by(
-            "processed_result__canonical_result_id",
-            "processed_result__canonical_revision",
-            "record_level",
-        )
-        .values(
-            "record_level",
-            "classification_outcome",
-            "recognition_status",
-            "currently_holds",
-        )
-    ) == before_levels
+    call_command("backfill_finalized_results", "--apply")
+
+    assert set(CanonicalResult.objects.values_list("kind", "value")) == {
+        ("single", 390),
+        ("average", 410),
+    }
+    assert ResultObservation.objects.count() == 2
+    assert not CanonicalResult.objects.exclude(attempt_number=None).exists()
+    assert not ResultObservation.objects.exclude(attempt_number=None).exists()
+    assert Achievement.objects.filter(type="WR", status="active").exists()
+    assert NotificationEvent.objects.count() == 1
+    old_event.refresh_from_db()
+    old_delivery.refresh_from_db()
+    assert old_event.achievement_id is None
+    assert old_delivery.status == NotificationDelivery.Status.CANCELLED

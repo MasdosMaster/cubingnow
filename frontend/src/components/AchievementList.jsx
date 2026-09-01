@@ -28,8 +28,8 @@ const CONTINENTAL_RECORD_LABELS = {
 };
 
 function recordLevelLabel(record) {
-  if (record.achievement.level !== "CR") return record.achievement.level;
-  return CONTINENTAL_RECORD_LABELS[record.competitor.continent] || record.achievement.level;
+  if (record.record_level !== "CR") return record.record_level;
+  return CONTINENTAL_RECORD_LABELS[record.continent] || record.record_level;
 }
 
 export function AchievementList({ level, records, loading, error }) {
@@ -53,19 +53,19 @@ export function AchievementList({ level, records, loading, error }) {
               </div>
               {records.map((record) => (
                 <article className="record-row" role="row" key={record.id}>
-                  <span className={`level level-${record.achievement.level.toLowerCase()}`}>{recordLevelLabel(record)}</span>
-                  <div><strong>{record.event.name}</strong><small>{record.result.kind}</small></div>
-                  <strong className="result">{record.result.formatted || record.result.raw}</strong>
-                  <div><strong>{record.competitor.name}</strong><small>{flag(record.competitor.country_code)} {record.competitor.wca_id}</small></div>
-                  <div><strong>{record.competition.name}</strong><small>{record.competition.wca_id}</small></div>
-                  <div><strong>{record.round.name || "—"}</strong><small>{record.round.id || ""}</small></div>
-                  <time className="detected-age" dateTime={record.timestamps.entered_at || record.timestamps.first_observed_at} title={absoluteTime(record.timestamps.entered_at || record.timestamps.first_observed_at)}>
-                    {formatDetectedAge(record.timestamps.entered_at || record.timestamps.first_observed_at)}<small>{absoluteTime(record.timestamps.entered_at || record.timestamps.first_observed_at)}</small>
+                  <span className={`level level-${record.record_level.toLowerCase()}`}>{recordLevelLabel(record)}</span>
+                  <div><strong>{record.event_name}</strong><small>{record.kind}</small></div>
+                  <strong className="result">{record.formatted_result || record.raw_result}</strong>
+                  <div><strong>{record.competitor_name}</strong><small>{flag(record.country_code)} {record.competitor_wca_id}</small></div>
+                  <div><strong>{record.competition_name}</strong><small>{record.wca_competition_id}</small></div>
+                  <div><strong>{record.round_name || "—"}</strong><small>{record.round_id || ""}</small></div>
+                  <time className="detected-age" dateTime={record.detected_at} title={absoluteTime(record.detected_at)}>
+                    {formatDetectedAge(record.detected_at)}<small>{absoluteTime(record.detected_at)}</small>
                   </time>
-                  <span className={`match ${record.validation.status === "verified" ? "yes" : ""}`}>{record.validation.status}</span>
+                  <span className={`match ${record.validation_status === "verified" ? "yes" : ""}`}>{record.validation_status}</span>
                   <div className="source-stack">
-                    {record.sources.pipelines.map((source) => <small key={source}>{source.replaceAll("_", " ")}</small>)}
-                    {record.sources.url && <a className="source-link" href={record.sources.url} target="_blank" rel="noreferrer">Result ↗</a>}
+                    {(record.sources || []).map((source) => <small key={source}>{source.replaceAll("_", " ")}</small>)}
+                    {record.source_url && <a className="source-link" href={record.source_url} target="_blank" rel="noreferrer">Result ↗</a>}
                   </div>
                 </article>
               ))}

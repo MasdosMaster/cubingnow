@@ -33,7 +33,6 @@ def map_record(payload: dict, observed_at: datetime) -> RecordCandidate:
         cutoff_payload = round_payload.get("cutoff") or {}
         wca_live_competition_id = str(competition.get("id") or "")
         round_id = str(round_payload.get("id") or "")
-        venues = competition.get("venues") or []
         return RecordCandidate(
             stable_result_identity=str(result["id"]),
             wca_live_record_id=str(payload["id"]),
@@ -42,9 +41,8 @@ def map_record(payload: dict, observed_at: datetime) -> RecordCandidate:
             wca_competition_id=competition["wcaId"],
             competition_name=competition["name"],
             competition_country_code=(
-                (venues or [{}])[0].get("country", {}).get("iso2", "")
+                (competition.get("venues") or [{}])[0].get("country", {}).get("iso2", "")
             ),
-            competition_timezone=(venues[0].get("timezone") or "") if len(venues) == 1 else "",
             competition_start_date=_date(competition["startDate"]),
             competition_end_date=_date(competition["endDate"]),
             round_id=round_id,

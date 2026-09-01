@@ -149,10 +149,6 @@ ATTENDANCE_SYNC_STALE_HOURS = int(os.getenv("ATTENDANCE_SYNC_STALE_HOURS", "12")
 WCA_PUBLIC_BASE_URL = os.getenv(
     "WCA_PUBLIC_BASE_URL", "https://www.worldcubeassociation.org"
 )
-WCA_PUBLIC_EXPORT_URL = os.getenv(
-    "WCA_PUBLIC_EXPORT_URL",
-    "https://www.worldcubeassociation.org/api/v0/export/public",
-)
 CUBINGCHINA_BASE_URL = os.getenv("CUBINGCHINA_BASE_URL", "https://cubing.com")
 CUBINGCHINA_WS_URL = os.getenv("CUBINGCHINA_WS_URL", "wss://cubing.com/ws")
 CUBINGCHINA_DISCOVERY_INTERVAL_SECONDS = int(

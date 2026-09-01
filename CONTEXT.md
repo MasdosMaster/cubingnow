@@ -20,14 +20,6 @@ _Avoid_: Result copy, provider label
 One finalized round-level best single or official average to which claims from one or more providers refer. Corrections revise this identity rather than creating another result.
 _Avoid_: Source result, record row
 
-**Processing Action**:
-The pending classifier instruction for a Canonical Result: active, corrected, or retracted. Successful classification resolves the instruction to processed; it is distinct from the result's underlying factual history.
-_Avoid_: Result status, achievement status
-
-**Processed Result**:
-The current frontend-facing classified projection of a Canonical Result, including its calculated record tags and presentation status. A correction or retraction replaces or removes a stale projection, while later supersession may annotate an otherwise correct projection without removing it.
-_Avoid_: Canonical Result, source observation
-
 **Provider Result State**:
 The latest provider-specific state of one competitor's result in a round, whether unfinished or finalized. It retains every entered attempt and may change as the round progresses.
 _Avoid_: Canonical Result, Achievement
@@ -63,10 +55,6 @@ _Avoid_: Observation time, solve time
 **Observation Time**:
 The time CubingNow first receives particular source evidence. It may be later than Entry Time.
 _Avoid_: Entry time, record time
-
-**Classification Time**:
-The time CubingNow finishes classifying a Canonical Result revision into a Processed Result.
-_Avoid_: Detection time, Entry Time, Observation Time
 
 **Featured Competitor**:
 A competitor included in CubingNow's manually curated set, identified by WCA ID, whose attendance at upcoming competitions is highlighted.

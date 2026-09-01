@@ -1,7 +1,6 @@
 import hashlib
 import json
 import logging
-from dataclasses import replace
 
 from django.db import transaction
 from django.db.models import F
@@ -17,7 +16,6 @@ from apps.records.models import (
     IngestionRun,
     RecentRecordObservation,
     SourceObservation,
-    SubscriptionRound,
 )
 from apps.records.reconciliation import (
     reconcile_result_observation,
@@ -233,7 +231,6 @@ def persist_record_candidate(
             competition_country_code=candidate.competition_country_code,
             competition_start_date=candidate.competition_start_date,
             competition_end_date=candidate.competition_end_date,
-            competition_timezone=candidate.competition_timezone,
             round_id=candidate.round_id,
             round_number=candidate.round_number,
             round_name=candidate.round_name,
@@ -282,18 +279,6 @@ def ingest_api_record(
     )
     try:
         item = map_record(payload, observed_at)
-        if not item.competition_timezone:
-            stored_timezone = (
-                SubscriptionRound.objects.filter(
-                    round_id=item.round_id,
-                    wca_competition_id=item.wca_competition_id,
-                )
-                .exclude(competition_timezone="")
-                .values_list("competition_timezone", flat=True)
-                .first()
-            )
-            if stored_timezone:
-                item = replace(item, competition_timezone=stored_timezone)
         if observation.processed_at:
             existing = RecentRecordObservation.objects.filter(
                 stable_result_identity=item.stable_result_identity,

@@ -126,7 +126,7 @@ Python dependencies are declared in `backend/pyproject.toml` and resolved exactl
 
 ## Deploying to Render
 
-The root `render.yaml` defines ten Render resources:
+The root `render.yaml` defines eight Render resources:
 
 - `cubingnow-web`: React static site at `cubingnow.com`
 - `cubingnow-api`: Django API at `api.cubingnow.com`
@@ -134,8 +134,6 @@ The root `render.yaml` defines ten Render resources:
 - `cubingnow-subscription-worker`: continuous WCA Live round subscription supervisor
 - `cubingnow-notification-worker`: queued Web Push delivery worker
 - `cubingnow-cubingchina-worker`: continuous CubingChina discovery and live collection
-- `cubingnow-classification-worker`: revision-based incremental classifier
-- `cubingnow-wca-export-refresh`: Tuesday 16:00 UTC public-results baseline refresh
 - `cubingnow-weekend-attendance-sync`: six-hourly public registration synchronization
 - `cubingnow-db`: PostgreSQL database
 

@@ -38,7 +38,7 @@ class NotificationEventAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "notification_type",
-        "processed_record_level",
+        "achievement",
         "occurred_at",
         "created_at",
         "correction_count",

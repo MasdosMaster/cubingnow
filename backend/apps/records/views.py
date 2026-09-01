@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from time import perf_counter
 
 from django.conf import settings
-from django.db.models import Count, Exists, Max, Min, OuterRef, Q, Subquery
+from django.db.models import Count, Exists, F, Max, Min, OuterRef, Q, Subquery
 from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -16,94 +16,74 @@ from apps.notifications.models import (
 from integrations.weekend_window import resolve_weekend_window
 
 from .models import (
+    Achievement,
     CanonicalResult,
-    ClassificationWork,
+    ClassificationScopeWork,
     CubingChinaCompetitionTarget,
     CubingChinaRoundTarget,
     IngestionWorkerStatus,
-    ProcessedResult,
-    ProcessedResultRecordLevel,
     RecentRecordObservation,
-    RecordValidation,
     ResultObservation,
     SourceObservation,
     SubscriptionRound,
 )
-from .serializers import (
-    ProcessedResultRecordLevelSerializer,
-    RecentRecordObservationSerializer,
-)
+from .serializers import AchievementSerializer, RecentRecordObservationSerializer
 
 
 class RecordViewSet(ReadOnlyModelViewSet):
-    """Public record feed backed by revision-level processed results."""
+    """Public WR/CR/NR/PR projection over canonical achievements."""
 
-    serializer_class = ProcessedResultRecordLevelSerializer
+    serializer_class = AchievementSerializer
 
     def get_queryset(self):
-        independently_verified = RecordValidation.objects.filter(
-            result_id=OuterRef("processed_result__canonical_result_id"),
-            level=OuterRef("record_level"),
-            result_value=OuterRef("processed_result__value"),
-            status=RecordValidation.Status.VERIFIED,
+        legacy_identity = Q(result__identity_key__contains="|attempt:") | Q(
+            result__identity_key__endswith="|aggregate"
+        )
+        finalized_counterpart = (
+            CanonicalResult.objects.filter(
+                wca_competition_id=OuterRef("result__wca_competition_id"),
+                competitor_wca_id=OuterRef("result__competitor_wca_id"),
+                event_id=OuterRef("result__event_id"),
+                round_number=OuterRef("result__round_number"),
+                kind=OuterRef("result__kind"),
+                status__in=[
+                    CanonicalResult.Status.ACTIVE,
+                    CanonicalResult.Status.CORRECTED,
+                ],
+            )
+            .exclude(
+                Q(identity_key__contains="|attempt:")
+                | Q(identity_key__endswith="|aggregate")
+            )
         )
         queryset = (
-            ProcessedResultRecordLevel.objects.select_related(
-                "processed_result", "processed_result__canonical_result"
+            Achievement.objects.select_related("result", "qualification")
+            .prefetch_related("result__observations")
+            .filter(
+                status=Achievement.Status.ACTIVE,
+                qualification__show_on_homepage=True,
             )
-            .prefetch_related("processed_result__canonical_result__observations")
-            .annotate(_independently_verified=Exists(independently_verified))
+            .annotate(_has_finalized_counterpart=Exists(finalized_counterpart))
             .exclude(
-                classification_outcome=ProcessedResultRecordLevel.ClassificationOutcome.NONE
+                legacy_identity
+                & Q(_has_finalized_counterpart=True)
+                & ~Q(result__wca_competition_id="")
+                & ~Q(result__competitor_wca_id="")
+                & Q(result__round_number__isnull=False)
             )
-            .order_by("-processed_result__classification_at", "-pk")
         )
         level = self.request.query_params.get("level")
         query = self.request.query_params.get("q")
-        include_history = self.request.query_params.get("include_history", "").lower() in {
-            "1",
-            "true",
-            "yes",
-        }
-        if not include_history:
-            queryset = queryset.filter(
-                processed_result__is_valid_result=True,
-                recognition_status=ProcessedResultRecordLevel.RecognitionStatus.RECOGNIZED,
-            ).filter(
-                Q(
-                    processed_result__validation_status=CanonicalResult.ValidationStatus.VERIFIED,
-                    processed_result__validation_reason="trusted_source_observation",
-                )
-                | Q(_independently_verified=True)
-            )
         if level:
-            level = level.upper()
-            queryset = queryset.filter(record_level=level)
-            higher_levels = {
-                "WR": (),
-                "CR": ("WR",),
-                "NR": ("WR", "CR"),
-                "PR": ("WR", "CR", "NR"),
-            }.get(level, ())
-            if higher_levels and not include_history:
-                queryset = queryset.exclude(
-                    processed_result__record_levels__record_level__in=higher_levels,
-                    processed_result__record_levels__classification_outcome__in=[
-                        ProcessedResultRecordLevel.ClassificationOutcome.BROKEN,
-                        ProcessedResultRecordLevel.ClassificationOutcome.TIED,
-                    ],
-                    processed_result__record_levels__recognition_status=(
-                        ProcessedResultRecordLevel.RecognitionStatus.RECOGNIZED
-                    ),
-                )
+            queryset = queryset.filter(type=level.upper())
         if query:
             queryset = queryset.filter(
-                Q(processed_result__competitor_name__icontains=query)
-                | Q(processed_result__competitor_wca_id__icontains=query)
-                | Q(processed_result__event_name__icontains=query)
-                | Q(processed_result__competition_name__icontains=query)
+                Q(result__competitor_name__icontains=query)
+                | Q(result__competitor_wca_id__icontains=query)
+                | Q(result__event_name__icontains=query)
+                | Q(result__competition_name__icontains=query)
             )
-        return queryset.distinct()
+        return queryset
 
 
 class RecentRecordObservationViewSet(ReadOnlyModelViewSet):
@@ -273,9 +253,8 @@ def _record_pipeline_health() -> dict:
         "source_observation_count": SourceObservation.objects.count(),
         "result_observation_count": ResultObservation.objects.count(),
         "canonical_result_count": CanonicalResult.objects.count(),
-        "processed_result_count": ProcessedResult.objects.count(),
-        "classified_record_level_count": ProcessedResultRecordLevel.objects.exclude(
-            classification_outcome=ProcessedResultRecordLevel.ClassificationOutcome.NONE
+        "active_achievement_count": Achievement.objects.filter(
+            status=Achievement.Status.ACTIVE
         ).count(),
         "pending_validation_count": CanonicalResult.objects.filter(
             validation_status=CanonicalResult.ValidationStatus.PENDING
@@ -295,35 +274,31 @@ def ingestion_status(request):
         settings.WCA_WEEKEND_END,
         timezone_name=settings.WCA_WEEKEND_TIME_ZONE,
     )
-    classification_pending = ClassificationWork.objects.filter(
-        status__in=[
-            ClassificationWork.Status.PENDING,
-            ClassificationWork.Status.PROCESSING,
-            ClassificationWork.Status.FAILED,
-        ]
+    classification_pending = ClassificationScopeWork.objects.filter(
+        requested_version__gt=F("processed_version")
     )
     classification_times = classification_pending.aggregate(
-        oldest_created_at=Min("created_at"),
+        oldest_dirty_since=Min("dirty_since"),
+        oldest_observed_at=Min("oldest_observed_at"),
     )
-    classification_completed = ClassificationWork.objects.aggregate(
-        last_completed_at=Max("completed_at"),
+    classification_completed = ClassificationScopeWork.objects.aggregate(
+        last_completed_at=Max("last_completed_at"),
+        max_last_duration_ms=Max("last_duration_ms"),
     )
-    oldest_created_at = classification_times["oldest_created_at"]
+    oldest_observed_at = classification_times["oldest_observed_at"]
     classification_health = {
-        "pending_revision_count": classification_pending.count(),
-        "claimed_revision_count": classification_pending.filter(
-            status=ClassificationWork.Status.PROCESSING
-        ).count(),
-        "failed_revision_count": classification_pending.filter(
-            status=ClassificationWork.Status.FAILED
-        ).count(),
-        "oldest_created_at": _iso(oldest_created_at),
+        "pending_scope_count": classification_pending.count(),
+        "claimed_scope_count": classification_pending.exclude(claimed_by="").count(),
+        "failed_scope_count": classification_pending.exclude(last_error="").count(),
+        "oldest_dirty_since": _iso(classification_times["oldest_dirty_since"]),
+        "oldest_observed_at": _iso(oldest_observed_at),
         "oldest_observation_lag_seconds": (
-            max((now - oldest_created_at).total_seconds(), 0)
-            if oldest_created_at
+            max((now - oldest_observed_at).total_seconds(), 0)
+            if oldest_observed_at
             else 0
         ),
         "last_completed_at": _iso(classification_completed["last_completed_at"]),
+        "max_last_duration_ms": classification_completed["max_last_duration_ms"],
     }
     round_counts = {
         "discovered": SubscriptionRound.objects.filter(active=True).count(),

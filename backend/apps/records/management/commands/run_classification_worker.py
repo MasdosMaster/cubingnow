@@ -3,14 +3,14 @@ import time
 
 from django.core.management.base import BaseCommand
 
-from apps.records.classification_work import process_ready_work, worker_identity
+from apps.records.classification_work import process_ready_scopes, worker_identity
 from apps.records.worker_recovery import TRANSIENT_DATABASE_ERRORS, prepare_database_retry
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Process durable canonical-result revision work in batched passes"
+    help = "Process durable event/kind classification work in batched passes"
 
     def add_arguments(self, parser):
         parser.add_argument("--interval", type=float, default=1.0)
@@ -23,7 +23,7 @@ class Command(BaseCommand):
         database_attempt = 0
         while True:
             try:
-                processed = process_ready_work(worker_id, limit=options["batch_size"])
+                processed = process_ready_scopes(worker_id, limit=options["batch_size"])
                 database_attempt = 0
             except TRANSIENT_DATABASE_ERRORS as exc:
                 if options["once"]:
@@ -39,7 +39,7 @@ class Command(BaseCommand):
                 )
                 continue
             if options["once"]:
-                self.stdout.write(f"Processed {processed} classification revisions")
+                self.stdout.write(f"Processed {processed} classification scopes")
                 return
             if processed == 0:
                 time.sleep(interval)

@@ -5,7 +5,8 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 from django.conf import settings
-from django.db import connection, models, transaction
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import connection, transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
@@ -193,47 +194,59 @@ def publish_record_notification(
     return event, False
 
 
-@transaction.atomic
-def publish_processed_result_notification(record_level):
-    """Publish one policy-selected processed record level idempotently."""
+def publish_achievement_notification(achievement):
+    """Publish policy-approved canonical achievement through the existing outbox."""
 
-    from apps.records.models import (
-        CanonicalResult,
-        ProcessedResultRecordLevel,
-        RecordValidation,
-    )
+    from apps.records.models import Achievement
 
-    row = ProcessedResultRecordLevel.objects.select_related(
-        "processed_result", "processed_result__canonical_result"
-    ).get(pk=record_level.pk)
-    result = row.processed_result
-    head = CanonicalResult.objects.select_for_update().get(pk=result.canonical_result_id)
-    trusted_result = (
-        result.validation_status == CanonicalResult.ValidationStatus.VERIFIED
-        and result.validation_reason == "trusted_source_observation"
-    )
-    independently_verified = RecordValidation.objects.filter(
-        result_id=result.canonical_result_id,
-        level=row.record_level,
-        result_value=result.value,
-        status=RecordValidation.Status.VERIFIED,
-    ).exists()
-    if (
-        not result.is_valid_result
-        or not (trusted_result or independently_verified)
-        or head.revision != result.canonical_revision
-        or row.record_level not in LEVEL_TO_NOTIFICATION_TYPE
-        or row.classification_outcome == "none"
-        or row.recognition_status != "recognized"
-    ):
+    if achievement.status != Achievement.Status.ACTIVE:
         return None, False
+    try:
+        qualification = achievement.qualification
+    except ObjectDoesNotExist:
+        return None, False
+    if not qualification.notification_eligible:
+        return None, False
+
+    result = achievement.result
+    if "|attempt:" in result.identity_key or result.identity_key.endswith("|aggregate"):
+        logger.info(
+            "legacy_achievement_notification_suppressed achievement_id=%s canonical_result_id=%s",
+            achievement.pk,
+            result.pk,
+        )
+        return None, False
+
+    historical_event = _historical_achievement_event(achievement)
+    if historical_event is not None:
+        cancelled = historical_event.deliveries.filter(
+            status__in=[
+                NotificationDelivery.Status.PENDING,
+                NotificationDelivery.Status.PROCESSING,
+                NotificationDelivery.Status.RETRY,
+            ]
+        ).update(
+            status=NotificationDelivery.Status.CANCELLED,
+            claimed_by="",
+            next_attempt_at=None,
+            last_error_code="finalized_identity_cutover",
+            last_error_message="Historical achievement was reconciled to a finalized result",
+            updated_at=timezone.now(),
+        )
+        _attach_achievement_event(historical_event, achievement)
+        logger.info(
+            "historical_achievement_notification_reused event_id=%s achievement_id=%s "
+            "deliveries_cancelled=%d",
+            historical_event.pk,
+            achievement.pk,
+            cancelled,
+        )
+        return historical_event, False
+
     proxy = SimpleNamespace(
         pk=None,
-        canonical_key=(
-            f"processed:{result.canonical_result_id}:{result.canonical_revision}:"
-            f"{row.record_level}"
-        ),
-        record_level=row.record_level,
+        canonical_key=f"achievement:{result.identity_key}|{achievement.type}",
+        record_level=achievement.type,
         event_id=result.event_id,
         event_name=result.event_name,
         formatted_result=result.formatted_result,
@@ -242,49 +255,113 @@ def publish_processed_result_notification(record_level):
         competition_country_code=result.competition_country_code,
         competition_name=result.competition_name,
         kind=result.kind,
-        detected_at=result.classification_at,
+        detected_at=result.entered_at or result.first_observed_at,
         source_payload={},
     )
     event, created = publish_record_notification(proxy)
-    if event.processed_record_level_id != row.pk:
-        event.processed_record_level = row
-        event.save(update_fields=["processed_record_level"])
+    _attach_achievement_event(event, achievement)
     return event, created
 
 
-def publish_processed_result_after_commit(processed_result_id: int) -> None:
-    def publish_safely():
-        from apps.records.models import ProcessedResultRecordLevel
-
-        rows = (
-            ProcessedResultRecordLevel.objects.select_related("processed_result")
-            .filter(
-                processed_result_id=processed_result_id,
-                record_level__in=LEVEL_TO_NOTIFICATION_TYPE,
-                classification_outcome__in=["broken", "tied"],
-                recognition_status="recognized",
-            )
-            .order_by(
-                models.Case(
-                    models.When(record_level="WR", then=0),
-                    models.When(record_level="CR", then=1),
-                    models.When(record_level="NR", then=2),
-                    default=3,
-                )
-            )
-            [:3]
+def _achievement_identity_family(result) -> str:
+    if result.wca_competition_id and result.competitor_wca_id and result.round_number is not None:
+        return "|".join(
+            [
+                "wca",
+                result.wca_competition_id.upper(),
+                result.competitor_wca_id.upper(),
+                result.event_id,
+                str(result.round_number),
+                result.kind,
+            ]
         )
-        for row in rows:
+    identity = result.identity_key
+    if identity.endswith(("|aggregate", "|final")):
+        return identity.rsplit("|", 1)[0]
+    if "|attempt:" in identity:
+        return identity.rsplit("|attempt:", 1)[0]
+    return identity
+
+
+def _historical_achievement_event(achievement):
+    """Find the pre-finalization event for the same achievement, if it exists.
+
+    Attempt-level identities included ``|attempt:N`` (or ``|aggregate``) in
+    their event key. Finalized identities deliberately omit that slot, so an
+    exact-key lookup alone would treat the same already-sent alert as new.
+    """
+
+    result = achievement.result
+    notification_type = LEVEL_TO_NOTIFICATION_TYPE[achievement.type]
+    desired_key = f"record:achievement:{result.identity_key}|{achievement.type}"
+    if NotificationEvent.objects.filter(deduplication_key=desired_key).exists():
+        return None
+    family = _achievement_identity_family(result)
+    candidates = NotificationEvent.objects.filter(
+        notification_type=notification_type,
+        deduplication_key__startswith=f"record:achievement:{family}|",
+        deduplication_key__endswith=f"|{achievement.type}",
+        payload__record_level=achievement.type,
+        payload__event_id=result.event_id,
+        payload__kind=result.kind,
+        payload__formatted_result=result.formatted_result,
+    ).exclude(deduplication_key=desired_key)
+    event = candidates.order_by("created_at").first()
+    if event is not None:
+        return event
+
+    # Source-only identities do not always retain a provider-neutral family in
+    # their legacy key. The payload fields are the durable audit data shared by
+    # both generations of the same alert.
+    return (
+        NotificationEvent.objects.filter(
+            notification_type=notification_type,
+            payload__record_level=achievement.type,
+            payload__event_id=result.event_id,
+            payload__kind=result.kind,
+            payload__formatted_result=result.formatted_result,
+            payload__competitor_name=result.competitor_name,
+            payload__competition_name=result.competition_name,
+        )
+        .exclude(deduplication_key=desired_key)
+        .order_by("created_at")
+        .first()
+    )
+
+
+def _attach_achievement_event(event, achievement) -> None:
+    result = achievement.result
+    updates = []
+    if event.achievement_id != achievement.pk:
+        event.achievement = achievement
+        updates.append("achievement")
+    source_record = result.source_record_projections.order_by("detected_at", "pk").first()
+    if source_record and event.source_record_id != source_record.pk:
+        event.source_record = source_record
+        updates.append("source_record")
+    if updates:
+        event.save(update_fields=updates)
+
+
+def publish_achievements_after_commit(achievement_ids) -> None:
+    ids = tuple(sorted(set(achievement_ids)))
+    if not ids:
+        return
+
+    def publish_safely():
+        from apps.records.models import Achievement
+
+        achievements = Achievement.objects.select_related(
+            "result", "qualification"
+        ).filter(pk__in=ids)
+        for achievement in achievements:
             try:
-                event, _created = publish_processed_result_notification(row)
-                if event is not None:
-                    return
+                publish_achievement_notification(achievement)
             except Exception:
                 logger.exception(
-                    "processed_result_notification_publication_failed processed_result_id=%s",
-                    processed_result_id,
+                    "achievement_notification_publication_failed achievement_id=%s",
+                    achievement.pk,
                 )
-                return
 
     transaction.on_commit(publish_safely)
 
@@ -295,9 +372,41 @@ def record_source_is_enabled(ingestion_method: str) -> bool:
 
 
 def publish_record_after_commit(record_id: int, ingestion_method: str) -> None:
-    # Provider-tag projections are retained for diagnostics only.  Notifications
-    # are published exclusively from ProcessedResultRecordLevel classification.
-    return None
+    if not record_source_is_enabled(ingestion_method):
+        return
+
+    def publish_safely():
+        from apps.records.models import Achievement, RecentRecordObservation
+
+        try:
+            record = RecentRecordObservation.objects.select_related(
+                "canonical_result"
+            ).get(pk=record_id)
+            if (
+                record.status != RecentRecordObservation.Status.ACTIVE
+                or record.canonical_result_id is None
+            ):
+                return
+            achievement = (
+                Achievement.objects.select_related("result", "qualification")
+                .filter(
+                    result_id=record.canonical_result_id,
+                    type=record.record_level,
+                    status=Achievement.Status.ACTIVE,
+                    qualification__notification_eligible=True,
+                )
+                .first()
+            )
+            if achievement:
+                publish_achievement_notification(achievement)
+        except Exception:
+            logger.exception(
+                "notification_event_publication_failed record_id=%s ingestion_method=%s",
+                record_id,
+                ingestion_method,
+            )
+
+    transaction.on_commit(publish_safely)
 
 
 def worker_identifier() -> str:

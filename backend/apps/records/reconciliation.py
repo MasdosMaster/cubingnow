@@ -1,18 +1,13 @@
 import logging
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.db import IntegrityError, transaction
 
+from integrations.wca.record_validation import validate_result_against_latest_snapshot
 from integrations.wca_live.result_values import format_result
 
+from .classification import reclassify_scope
 from .domain import NormalizedResultObservation
-from .models import (
-    CanonicalResult,
-    CanonicalResultRevision,
-    ClassificationWork,
-    ResultIdentityScope,
-    ResultObservation,
-)
+from .models import CanonicalResult, ResultIdentityScope, ResultObservation
 from .source_trust import (
     record_claim_is_trusted,
     result_evidence_is_trusted,
@@ -20,35 +15,6 @@ from .source_trust import (
 )
 
 logger = logging.getLogger(__name__)
-
-REVISION_FIELDS = (
-    "identity_key",
-    "wca_competition_id",
-    "competition_name",
-    "competition_country_code",
-    "competition_start_date",
-    "competition_end_date",
-    "competition_timezone",
-    "competition_local_date",
-    "timezone_resolution_status",
-    "timezone_resolution_reason",
-    "round_id",
-    "round_number",
-    "round_name",
-    "event_id",
-    "event_name",
-    "competitor_name",
-    "competitor_wca_id",
-    "country_code",
-    "kind",
-    "value",
-    "formatted_result",
-    "entered_at",
-    "first_observed_at",
-    "source_url",
-    "validation_status",
-    "validation_reason",
-)
 
 
 def _existing_observation(data: NormalizedResultObservation) -> ResultObservation | None:
@@ -99,30 +65,9 @@ def _find_canonical(
     return _same_source_canonical(data)
 
 
-def _local_date(data: NormalizedResultObservation):
-    if data.competition_local_date is not None:
-        return data.competition_local_date
-    if not data.competition_timezone:
-        return None
-    instant = data.entered_at or data.observed_at
-    try:
-        return instant.astimezone(ZoneInfo(data.competition_timezone)).date()
-    except ZoneInfoNotFoundError:
-        return None
-
-
-def _timezone_resolution(data: NormalizedResultObservation) -> tuple[str, str]:
-    if not data.competition_timezone:
-        return "unresolved", "missing_or_ambiguous_source_timezone"
-    if _local_date(data) is None:
-        return "unresolved", "invalid_source_timezone"
-    return "resolved", "provider_supplied_iana_timezone"
-
-
 def _create_canonical(
     data: NormalizedResultObservation, identity_scope: ResultIdentityScope | None
 ) -> CanonicalResult:
-    timezone_status, timezone_reason = _timezone_resolution(data)
     defaults = {
         "identity_scope": identity_scope,
         "wca_competition_id": data.wca_competition_id,
@@ -130,10 +75,6 @@ def _create_canonical(
         "competition_country_code": data.competition_country_code,
         "competition_start_date": data.competition_start_date,
         "competition_end_date": data.competition_end_date,
-        "competition_timezone": data.competition_timezone,
-        "competition_local_date": _local_date(data),
-        "timezone_resolution_status": timezone_status,
-        "timezone_resolution_reason": timezone_reason,
         "round_id": data.round_id,
         "round_number": data.round_number,
         "round_name": data.round_name,
@@ -178,24 +119,19 @@ def _update_canonical_context(result: CanonicalResult, data: NormalizedResultObs
     result.competitor_wca_id = data.competitor_wca_id or result.competitor_wca_id
     result.country_code = data.country_code or result.country_code
     result.source_url = data.source_url or result.source_url
-    if data.competition_timezone:
-        result.competition_timezone = data.competition_timezone
-        result.competition_local_date = _local_date(data)
-    timezone_status, timezone_reason = _timezone_resolution(data)
-    if timezone_status == "resolved" or not result.competition_timezone:
-        result.timezone_resolution_status = timezone_status
-        result.timezone_resolution_reason = timezone_reason
 
 
-def _refresh_canonical_values(result: CanonicalResult) -> bool:
+def _refresh_canonical(result: CanonicalResult) -> None:
     observations = list(
         result.observations.filter(status=ResultObservation.Status.ACTIVE).order_by("pk")
     )
     if not observations:
+        result.status = CanonicalResult.Status.RETRACTED
         result.validation_status = CanonicalResult.ValidationStatus.PENDING
         result.validation_reason = "all_source_observations_retracted"
         result.current_observation = None
-        return False
+        result.save()
+        return
 
     trusted = [item for item in observations if item.result_evidence_trusted]
     trusted_values = {item.value for item in trusted}
@@ -207,12 +143,18 @@ def _refresh_canonical_values(result: CanonicalResult) -> bool:
             item.pk,
         ),
     )
+    value_changed = result.value != chosen.value
     result.current_observation = chosen
     result.value = chosen.value
     result.formatted_result = format_result(result.event_id, result.kind, chosen.value)
     result.entered_at = chosen.entered_at or result.entered_at
     result.first_observed_at = min(item.first_observed_at for item in observations)
     result.last_observed_at = max(item.last_observed_at for item in observations)
+    if value_changed:
+        result.revision += 1
+    result.status = (
+        CanonicalResult.Status.CORRECTED if result.revision > 1 else CanonicalResult.Status.ACTIVE
+    )
     if len(trusted_values) > 1:
         result.validation_status = CanonicalResult.ValidationStatus.REJECTED
         result.validation_reason = "trusted_source_disagreement"
@@ -222,92 +164,7 @@ def _refresh_canonical_values(result: CanonicalResult) -> bool:
     else:
         result.validation_status = CanonicalResult.ValidationStatus.PENDING
         result.validation_reason = "untrusted_source_only"
-    return True
-
-
-def _revision_values(result: CanonicalResult) -> dict:
-    values = {field: getattr(result, field) for field in REVISION_FIELDS}
-    values.update(
-        {
-            "canonical_status": result.status,
-            "last_observed_at": result.last_observed_at,
-        }
-    )
-    return values
-
-
-def _revision_changed(result: CanonicalResult, latest: CanonicalResultRevision | None) -> bool:
-    if latest is None:
-        return True
-    return any(getattr(latest, field) != getattr(result, field) for field in REVISION_FIELDS)
-
-
-def _snapshot_and_enqueue(result: CanonicalResult) -> CanonicalResultRevision | None:
-    """Persist a new immutable snapshot only for a classifier-relevant change."""
-
-    latest = result.revisions.order_by("-revision").first()
-    has_active_evidence = result.current_observation_id is not None
-    changed = _revision_changed(result, latest)
-    if latest is None:
-        action = CanonicalResultRevision.Action.ACTIVE
-        result.status = CanonicalResult.Status.ACTIVE
-    elif not has_active_evidence:
-        if latest.canonical_status == CanonicalResult.Status.RETRACTED:
-            result.status = latest.canonical_status
-            result.save()
-            return None
-        action = CanonicalResultRevision.Action.RETRACTED
-        result.status = CanonicalResult.Status.RETRACTED
-    elif latest.canonical_status == CanonicalResult.Status.RETRACTED:
-        action = CanonicalResultRevision.Action.ACTIVE
-        result.status = CanonicalResult.Status.ACTIVE
-    elif changed:
-        action = CanonicalResultRevision.Action.CORRECTED
-        result.status = CanonicalResult.Status.CORRECTED
-    else:
-        # Observation timestamps and duplicate raw evidence may update the mutable
-        # head without creating classifier work.
-        result.status = latest.canonical_status
-        result.save()
-        return None
-
-    result.revision = 1 if latest is None else latest.revision + 1
     result.save()
-    revision = CanonicalResultRevision.objects.create(
-        canonical_result=result,
-        revision=result.revision,
-        action=action,
-        **_revision_values(result),
-    )
-    ClassificationWork.objects.get_or_create(
-        canonical_result_revision=revision,
-        defaults={
-            "canonical_result": result,
-            "revision": revision.revision,
-            "action": action,
-        },
-    )
-    return revision
-
-
-def _refresh_and_enqueue(result: CanonicalResult) -> CanonicalResultRevision | None:
-    _refresh_canonical_values(result)
-    result.save()
-    # Validate CubingChina evidence against the already stored WCA snapshot before
-    # freezing the classifier input. This performs no network I/O.
-    from integrations.wca.record_validation import validate_result_against_latest_snapshot
-
-    validate_result_against_latest_snapshot(result, enqueue_revision=False)
-    result.refresh_from_db()
-    return _snapshot_and_enqueue(result)
-
-
-@transaction.atomic
-def enqueue_current_canonical_state(result_id: int) -> CanonicalResultRevision | None:
-    """Snapshot a classifier-relevant head change made by an upstream service."""
-
-    result = CanonicalResult.objects.select_for_update().get(pk=result_id)
-    return _snapshot_and_enqueue(result)
 
 
 @transaction.atomic
@@ -316,12 +173,6 @@ def reconcile_result_observation(
     *,
     defer_classification: bool = False,
 ) -> ResultObservation:
-    """Reconcile evidence and transactionally enqueue its immutable revision.
-
-    ``defer_classification`` remains accepted at ingestion boundaries for a safe
-    rolling deployment; classification is always asynchronous now.
-    """
-
     identity_scope = None
     if data.natural_result_prefix:
         scope, _created = ResultIdentityScope.objects.get_or_create(key=data.natural_result_prefix)
@@ -369,8 +220,8 @@ def reconcile_result_observation(
 
     changed = not observation_created and (
         observation.value != data.value
+        or observation.source_record_tag != data.source_record_tag
         or observation.status != ResultObservation.Status.ACTIVE
-        or observation.entered_at != data.entered_at
     )
     observation.raw_observation_id = data.raw_observation_id
     observation.source = data.source
@@ -381,8 +232,6 @@ def reconcile_result_observation(
     observation.kind = data.kind
     observation.attempt_number = None
     observation.value = data.value
-    # Provider tags are retained only as source audit data.  They never enter the
-    # revision fingerprint or classifier.
     observation.source_record_tag = data.source_record_tag
     observation.source_claim_trusted = record_claim_is_trusted(data.ingestion_method)
     observation.result_evidence_trusted = result_evidence_is_trusted(data.ingestion_method)
@@ -394,19 +243,22 @@ def reconcile_result_observation(
         observation.revision += 1
     observation.save()
 
-    revision = _refresh_and_enqueue(result)
+    _refresh_canonical(result)
     if previous_result and previous_result.pk != result.pk:
         previous_result = CanonicalResult.objects.select_for_update().get(pk=previous_result.pk)
-        _refresh_and_enqueue(previous_result)
+        _refresh_canonical(previous_result)
+    if not defer_classification:
+        validate_result_against_latest_snapshot(result)
+        if previous_result and previous_result.pk != result.pk:
+            validate_result_against_latest_snapshot(previous_result)
+        reclassify_scope(result.event_id, result.kind)
     logger.info(
-        "result_observation_reconciled source=%s method=%s observation_id=%s "
-        "canonical_result_id=%s canonical_revision=%s work_enqueued=%s",
+        "result_observation_reconciled source=%s method=%s observation_id=%s canonical_result_id=%s revision=%s",
         data.source,
         data.ingestion_method,
         observation.pk,
         result.pk,
-        result.revision,
-        bool(revision),
+        observation.revision,
     )
     return observation
 
@@ -430,6 +282,9 @@ def retract_result_observation(
     observation.last_observed_at = observed_at
     observation.revision += 1
     observation.save(update_fields=["status", "last_observed_at", "revision", "updated_at"])
-    result = CanonicalResult.objects.select_for_update().get(pk=observation.canonical_result_id)
-    _refresh_and_enqueue(result)
+    result = observation.canonical_result
+    _refresh_canonical(result)
+    if not defer_classification:
+        validate_result_against_latest_snapshot(result)
+        reclassify_scope(result.event_id, result.kind)
     return True

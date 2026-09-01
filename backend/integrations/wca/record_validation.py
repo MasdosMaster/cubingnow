@@ -8,8 +8,8 @@ from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils import timezone
 
 from apps.records.models import (
+    Achievement,
     CanonicalResult,
-    RecordLevel,
     RecordValidation,
     ResultObservation,
     WCARecordSnapshot,
@@ -109,11 +109,11 @@ def parse_wca_records(payload: dict) -> ParsedWCARecords:
         payload["world_records"], context="world_records"
     ).items():
         for kind, value in values.items():
-            records[_key(RecordLevel.WORLD, event_id, kind)] = value
+            records[_key(Achievement.Type.WORLD, event_id, kind)] = value
 
     for source_key, level in (
-        ("continental_records", RecordLevel.CONTINENTAL),
-        ("national_records", RecordLevel.NATIONAL),
+        ("continental_records", Achievement.Type.CONTINENTAL),
+        ("national_records", Achievement.Type.NATIONAL),
     ):
         regions = payload[source_key]
         if not isinstance(regions, dict):
@@ -170,15 +170,15 @@ def _country_name(result: CanonicalResult) -> str:
 
 
 def _validation_regions(result: CanonicalResult):
-    from apps.records.classification import continent_name
+    from apps.records.classification import _region_for
 
-    yield RecordLevel.WORLD, ""
-    continent = continent_name(result.country_code)
+    yield Achievement.Type.WORLD, ""
+    continent = _region_for(result, Achievement.Type.CONTINENTAL)
     if continent:
-        yield RecordLevel.CONTINENTAL, f"_{continent}"
+        yield Achievement.Type.CONTINENTAL, f"_{continent}"
     country = _country_name(result)
     if country:
-        yield RecordLevel.NATIONAL, country
+        yield Achievement.Type.NATIONAL, country
 
 
 def _has_current_cubingchina_evidence(result: CanonicalResult) -> bool:
@@ -191,11 +191,7 @@ def _has_current_cubingchina_evidence(result: CanonicalResult) -> bool:
 
 @transaction.atomic
 def validate_result_against_snapshot(
-    result: CanonicalResult,
-    snapshot: WCARecordSnapshot,
-    *,
-    checked_at=None,
-    enqueue_revision: bool = True,
+    result: CanonicalResult, snapshot: WCARecordSnapshot, *, checked_at=None
 ) -> set[str]:
     checked_at = checked_at or timezone.now()
     result = CanonicalResult.objects.select_for_update().get(pk=result.pk)
@@ -210,6 +206,7 @@ def validate_result_against_snapshot(
 
     verified = set()
     present_levels = set()
+    comparisons = {}
     for level, api_region in _validation_regions(result):
         benchmark = snapshot.records.get(_key(level, result.event_id, result.kind, api_region))
         if benchmark is None:
@@ -221,6 +218,7 @@ def validate_result_against_snapshot(
         status = RecordValidation.Status.VERIFIED if matches else RecordValidation.Status.REJECTED
         if matches:
             verified.add(level)
+        comparisons[level] = status
         RecordValidation.objects.update_or_create(
             result=result,
             validator=RecordValidation.Validator.WCA_RECORDS_API,
@@ -245,31 +243,33 @@ def validate_result_against_snapshot(
     ).delete()
 
     if not trusted and result.validation_reason != "trusted_source_disagreement":
+        claims = set(
+            result.observations.filter(
+                source=ResultObservation.Source.CUBINGCHINA,
+                status=ResultObservation.Status.ACTIVE,
+                value=result.value,
+            )
+            .exclude(source_record_tag="")
+            .values_list("source_record_tag", flat=True)
+        )
         if verified:
             result.validation_status = CanonicalResult.ValidationStatus.VERIFIED
             result.validation_reason = "wca_records_api_record_match"
+        elif claims.intersection(comparisons):
+            result.validation_status = CanonicalResult.ValidationStatus.REJECTED
+            result.validation_reason = "wca_records_api_record_mismatch"
         else:
             result.validation_status = CanonicalResult.ValidationStatus.PENDING
             result.validation_reason = "wca_records_api_no_record_match"
         result.save(update_fields=["validation_status", "validation_reason", "updated_at"])
-        if enqueue_revision:
-            from apps.records.reconciliation import enqueue_current_canonical_state
-
-            enqueue_current_canonical_state(result.pk)
     return verified
 
 
-def validate_result_against_latest_snapshot(
-    result: CanonicalResult, *, enqueue_revision: bool = True
-) -> set[str]:
+def validate_result_against_latest_snapshot(result: CanonicalResult) -> set[str]:
     snapshot = WCARecordSnapshot.objects.order_by("-last_fetched_at", "-pk").first()
     if snapshot is None:
         return set()
-    return validate_result_against_snapshot(
-        result,
-        snapshot,
-        enqueue_revision=enqueue_revision,
-    )
+    return validate_result_against_snapshot(result, snapshot)
 
 
 @transaction.atomic
@@ -346,7 +346,9 @@ def _validate_scope_batch(
             and row.value == result.value
             for row in observations
         )
+        claims = {row.source_record_tag for row in cubingchina_current if row.source_record_tag}
         verified = set()
+        comparisons = {}
         for level, api_region in _validation_regions(result):
             benchmark = snapshot.records.get(_key(level, result.event_id, result.kind, api_region))
             if benchmark is None:
@@ -359,6 +361,7 @@ def _validate_scope_batch(
             )
             if matches:
                 verified.add(level)
+            comparisons[level] = status
             desired_keys.add((result.pk, level))
             values = {
                 "snapshot": snapshot,
@@ -394,6 +397,9 @@ def _validate_scope_batch(
             if verified:
                 status = CanonicalResult.ValidationStatus.VERIFIED
                 reason = "wca_records_api_record_match"
+            elif claims.intersection(comparisons):
+                status = CanonicalResult.ValidationStatus.REJECTED
+                reason = "wca_records_api_record_mismatch"
             else:
                 status = CanonicalResult.ValidationStatus.PENDING
                 reason = "wca_records_api_no_record_match"
@@ -428,10 +434,6 @@ def _validate_scope_batch(
             result_updates,
             ["validation_status", "validation_reason", "updated_at"],
         )
-        from apps.records.reconciliation import enqueue_current_canonical_state
-
-        for result in result_updates:
-            enqueue_current_canonical_state(result.pk)
     return len(results)
 
 
@@ -479,16 +481,17 @@ def validate_scope_against_latest_snapshot(event_id: str, kind: str) -> int:
     return validated
 
 
+@transaction.atomic
 def refresh_wca_record_validations(payload: dict, *, source_url: str, fetched_at=None):
+    from apps.records.classification_work import mark_classification_scopes_dirty
+
     previous = WCARecordSnapshot.objects.order_by("-last_fetched_at", "-pk").first()
     snapshot = store_wca_record_snapshot(payload, source_url=source_url, fetched_at=fetched_at)
-    previous_records = previous.records if previous else {}
-    candidate_scopes = _changed_record_scopes(previous_records, snapshot.records)
-    for key in snapshot.records:
-        _level, event_id, kind, _region = key.split("|", 3)
-        candidate_scopes.add((event_id, kind))
-    # Revalidate relevant live CubingChina scopes even for an identical snapshot.
-    # That makes a partial batch failure self-healing on the next refresh.
-    for event_id, kind in sorted(_relevant_changed_scopes(candidate_scopes)):
-        validate_scope_against_latest_snapshot(event_id, kind)
+    scopes = _relevant_changed_scopes(
+        _changed_record_scopes(previous.records if previous else {}, snapshot.records)
+    )
+    mark_classification_scopes_dirty(
+        scopes,
+        observed_at=fetched_at or timezone.now(),
+    )
     return snapshot

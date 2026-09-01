@@ -137,8 +137,8 @@ class NotificationEvent(models.Model):
         on_delete=models.SET_NULL,
         related_name="notification_events",
     )
-    processed_record_level = models.ForeignKey(
-        "records.ProcessedResultRecordLevel",
+    achievement = models.ForeignKey(
+        "records.Achievement",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,

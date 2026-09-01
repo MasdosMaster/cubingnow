@@ -14,7 +14,6 @@ from apps.records.models import (
     RecentRecordObservation,
     SubscriptionRound,
 )
-from integrations.wca.api_client import WCAAPIClient
 
 from .api_client import WCALiveAPIClient
 from .discovery import discover_weekend_rounds
@@ -43,7 +42,6 @@ class SubscriptionSupervisor:
         catchup_minutes: int = 60,
         run: IngestionRun | None = None,
         api_client_factory=WCALiveAPIClient,
-        wca_public_client_factory=WCAAPIClient,
         subscription_client_factory=WCALiveSubscriptionClient,
     ):
         self.weekend_start = weekend_start
@@ -55,7 +53,6 @@ class SubscriptionSupervisor:
         self.catchup_minutes = max(catchup_minutes, 0)
         self.run = run
         self.api_client_factory = api_client_factory
-        self.wca_public_client_factory = wca_public_client_factory
         self.subscription_client_factory = subscription_client_factory
         self._stopping = False
 
@@ -156,18 +153,13 @@ class SubscriptionSupervisor:
 
     async def _discover(self) -> dict[str, SubscriptionRound]:
         client = self.api_client_factory(self.api_endpoint)
-        wcif_client = self.wca_public_client_factory(settings.WCA_PUBLIC_BASE_URL)
-        try:
-            targets, metadata = await self._db(
-                discover_weekend_rounds,
-                client,
-                self.weekend_start,
-                self.weekend_end,
-                self.lookback_days,
-                wcif_client,
-            )
-        finally:
-            wcif_client.close()
+        targets, metadata = await self._db(
+            discover_weekend_rounds,
+            client,
+            self.weekend_start,
+            self.weekend_end,
+            self.lookback_days,
+        )
         return await self._db(self._persist_targets, targets, metadata)
 
     async def _subscribe_targets(self, client, targets: dict[str, SubscriptionRound]) -> None:
@@ -221,7 +213,6 @@ class SubscriptionSupervisor:
                         wca_competition_id=target.wca_competition_id,
                         competition_name=target.competition_name,
                         competition_country_code=target.competition_country_code,
-                        competition_timezone=target.competition_timezone,
                         competition_start_date=target.competition_start_date,
                         competition_end_date=target.competition_end_date,
                         event_id=target.event_id,
@@ -244,7 +235,6 @@ class SubscriptionSupervisor:
                     "wca_competition_id",
                     "competition_name",
                     "competition_country_code",
-                    "competition_timezone",
                     "competition_start_date",
                     "competition_end_date",
                     "event_id",
