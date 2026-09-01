@@ -4,7 +4,6 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-from apps.records.classification_work import mark_classification_scopes_dirty
 from apps.records.models import (
     CubingChinaDiffTable,
     CubingChinaRoundTarget,
@@ -436,10 +435,7 @@ def process_round_snapshot(
                 last_observed_at=observed_at,
                 processed_at=observed_at,
             )
-        queued_scopes = mark_classification_scopes_dirty(
-            dirty_scopes,
-            observed_at=observed_at,
-        )
+        queued_scopes = len(dirty_scopes)
         _mark_snapshot_success(target, observed_at)
         _finish_source_observation(source_observation, source_created, run)
         return {
@@ -522,10 +518,7 @@ def process_result_update(
                 )
             )
             _persist_state(target, result, observed_at)
-        queued_scopes = mark_classification_scopes_dirty(
-            dirty_scopes,
-            observed_at=observed_at,
-        )
+        queued_scopes = len(dirty_scopes)
         _mark_snapshot_success(target, observed_at)
         _finish_source_observation(source_observation, source_created, run)
         return {

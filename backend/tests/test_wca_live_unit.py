@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from apps.records.models import (
     CanonicalResult,
-    ClassificationScopeWork,
+    ClassificationWork,
     RecentRecordObservation,
     ResultObservation,
     SourceObservation,
@@ -21,6 +21,7 @@ from integrations.wca_live.discovery import (
     competition_overlaps,
     filter_overlapping_competitions,
     flatten_competition_rounds,
+    round_timezones_from_wcif,
 )
 from integrations.wca_live.ingestion import persist_record_candidate
 from integrations.wca_live.result_values import (
@@ -177,6 +178,64 @@ def test_flattens_competitions_events_and_rounds():
     assert targets[0].cutoff_value == 1000
 
 
+def test_multi_venue_round_timezone_is_resolved_from_wcif_activity_schedule():
+    wcif = {
+        "schedule": {
+            "venues": [
+                {
+                    "timezone": "Europe/Amsterdam",
+                    "rooms": [
+                        {
+                            "activities": [
+                                {
+                                    "activityCode": "333-r1",
+                                    "childActivities": [
+                                        {"activityCode": "333-r1-g1"}
+                                    ],
+                                },
+                                {"activityCode": "333-r2"},
+                            ]
+                        }
+                    ],
+                },
+                {
+                    "timezone": "America/New_York",
+                    "rooms": [
+                        {"activities": [{"activityCode": "333-r2"}]}
+                    ],
+                },
+            ]
+        }
+    }
+    timezones = round_timezones_from_wcif(wcif)
+    assert timezones[("333", 1)] == "Europe/Amsterdam"
+    assert ("333", 2) not in timezones
+
+    competition = {
+        "id": "competition-1",
+        "wcaId": "WeekendOpen2026",
+        "name": "Weekend Open",
+        "startDate": "2026-08-05",
+        "endDate": "2026-08-07",
+        "venues": [
+            {"timezone": "Europe/Amsterdam", "country": {"iso2": "NL"}},
+            {"timezone": "America/New_York", "country": {"iso2": "US"}},
+        ],
+        "competitionEvents": [
+            {
+                "event": {"id": "333", "name": "3x3x3 Cube"},
+                "rounds": [
+                    {"id": "round-1", "number": 1},
+                    {"id": "round-2", "number": 2},
+                ],
+            }
+        ],
+    }
+    targets = flatten_competition_rounds(competition, timezones)
+    assert targets[0].competition_timezone == "Europe/Amsterdam"
+    assert targets[1].competition_timezone == ""
+
+
 def test_snapshot_normalization_is_stable_and_timezone_aware():
     result = normalize_round_snapshot(snapshot())["result-1"]
     assert result.attempts == (600, 620, 610)
@@ -289,7 +348,11 @@ def test_snapshot_marks_only_the_finalized_kind_whose_value_changed(
     initial = snapshot()
     first = process_round_snapshot("round-1", initial, catchup_minutes=300, observed_at=observed_at)
     assert first["classification_scopes_queued"] == 2
-    assert set(ClassificationScopeWork.objects.values_list("kind", "requested_version")) == {
+    assert set(
+        ClassificationWork.objects.values_list(
+            "canonical_result_revision__kind", "revision"
+        )
+    ) == {
         ("single", 1),
         ("average", 1),
     }
@@ -319,8 +382,13 @@ def test_snapshot_marks_only_the_finalized_kind_whose_value_changed(
     assert second["changes"] == 1
     assert second["classification_scopes_queued"] == 1
     assert len(reconciled) == 1
-    assert set(ClassificationScopeWork.objects.values_list("kind", "requested_version")) == {
+    assert set(
+        ClassificationWork.objects.values_list(
+            "canonical_result_revision__kind", "revision"
+        )
+    ) == {
         ("single", 1),
+        ("average", 1),
         ("average", 2),
     }
 
@@ -447,7 +515,7 @@ def test_correction_to_unfinished_retracts_then_reuses_finalized_rows():
     assert dict(CanonicalResult.objects.values_list("kind", "pk")) == original_ids
     single = CanonicalResult.objects.get(kind="single")
     assert single.value == 580
-    assert single.revision == 2
+    assert single.revision == 3
 
 
 @pytest.mark.django_db

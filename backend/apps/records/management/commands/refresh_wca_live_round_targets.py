@@ -2,6 +2,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.records.models import SubscriptionRound
+from integrations.wca.api_client import WCAAPIClient
 from integrations.wca_live.api_client import WCALiveAPIClient
 from integrations.wca_live.discovery import discover_weekend_rounds
 from integrations.weekend_window import resolve_weekend_window
@@ -30,12 +31,14 @@ class Command(BaseCommand):
         except ValueError as exc:
             raise CommandError("--start and --end must be valid ISO dates") from exc
 
-        targets, metadata = discover_weekend_rounds(
-            WCALiveAPIClient(options["api_endpoint"]),
-            weekend_start,
-            weekend_end,
-            options["lookback_days"],
-        )
+        with WCAAPIClient(settings.WCA_PUBLIC_BASE_URL) as wcif_client:
+            targets, metadata = discover_weekend_rounds(
+                WCALiveAPIClient(options["api_endpoint"]),
+                weekend_start,
+                weekend_end,
+                options["lookback_days"],
+                wcif_client,
+            )
         SubscriptionRound.objects.bulk_create(
             [
                 SubscriptionRound(
@@ -44,6 +47,7 @@ class Command(BaseCommand):
                     wca_competition_id=target.wca_competition_id,
                     competition_name=target.competition_name,
                     competition_country_code=target.competition_country_code,
+                    competition_timezone=target.competition_timezone,
                     competition_start_date=target.competition_start_date,
                     competition_end_date=target.competition_end_date,
                     event_id=target.event_id,
@@ -66,6 +70,7 @@ class Command(BaseCommand):
                 "wca_competition_id",
                 "competition_name",
                 "competition_country_code",
+                "competition_timezone",
                 "competition_start_date",
                 "competition_end_date",
                 "event_id",

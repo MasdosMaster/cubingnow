@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.competitions.models import Competition
@@ -93,43 +94,6 @@ class ResultIdentityScope(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
-class ClassificationScopeWork(models.Model):
-    """Durable, versioned request to rebuild one event/kind classification scope."""
-
-    event_id = models.CharField(max_length=16)
-    kind = models.CharField(
-        max_length=8,
-        choices=(("single", "Single"), ("average", "Average")),
-    )
-    requested_version = models.PositiveBigIntegerField(default=0)
-    processed_version = models.PositiveBigIntegerField(default=0)
-    dirty_since = models.DateTimeField(null=True, blank=True)
-    oldest_observed_at = models.DateTimeField(null=True, blank=True)
-    not_before = models.DateTimeField(null=True, blank=True, db_index=True)
-    claimed_by = models.CharField(max_length=128, blank=True)
-    claim_expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
-    last_started_at = models.DateTimeField(null=True, blank=True)
-    last_completed_at = models.DateTimeField(null=True, blank=True)
-    last_duration_ms = models.PositiveIntegerField(null=True, blank=True)
-    last_result_count = models.PositiveIntegerField(default=0)
-    last_error = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["event_id", "kind"], name="unique_classification_scope_work"
-            )
-        ]
-        indexes = [
-            models.Index(
-                fields=["dirty_since", "not_before"],
-                name="classification_work_ready_idx",
-            )
-        ]
-
-
 class CanonicalResult(models.Model):
     """One finalized round-level best single or official average."""
 
@@ -187,6 +151,10 @@ class CanonicalResult(models.Model):
         default=ValidationStatus.PENDING,
     )
     validation_reason = models.CharField(max_length=128, blank=True)
+    competition_timezone = models.CharField(max_length=64, blank=True)
+    competition_local_date = models.DateField(null=True, blank=True)
+    timezone_resolution_status = models.CharField(max_length=16, default="unresolved")
+    timezone_resolution_reason = models.CharField(max_length=64, blank=True)
     revision = models.PositiveIntegerField(default=1)
     current_observation = models.ForeignKey(
         "ResultObservation",
@@ -220,6 +188,130 @@ class CanonicalResult(models.Model):
                     "status",
                 ],
                 name="canonical_family_status_idx",
+            ),
+        ]
+
+
+class CanonicalResultRevision(models.Model):
+    """Immutable classifier-ready snapshot of one canonical result revision."""
+
+    class Action(models.TextChoices):
+        ACTIVE = "active", "Active"
+        CORRECTED = "corrected", "Corrected"
+        RETRACTED = "retracted", "Retracted"
+
+    canonical_result = models.ForeignKey(
+        CanonicalResult, on_delete=models.CASCADE, related_name="revisions"
+    )
+    revision = models.PositiveIntegerField()
+    action = models.CharField(max_length=16, choices=Action.choices)
+    identity_key = models.CharField(max_length=768)
+    wca_competition_id = models.CharField(max_length=64, blank=True, db_index=True)
+    competition_name = models.CharField(max_length=255)
+    competition_country_code = models.CharField(max_length=8, blank=True)
+    competition_start_date = models.DateField(null=True, blank=True)
+    competition_end_date = models.DateField(null=True, blank=True)
+    competition_timezone = models.CharField(max_length=64, blank=True)
+    competition_local_date = models.DateField(null=True, blank=True, db_index=True)
+    timezone_resolution_status = models.CharField(max_length=16, default="unresolved")
+    timezone_resolution_reason = models.CharField(max_length=64, blank=True)
+    round_id = models.CharField(max_length=64, blank=True)
+    round_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    round_name = models.CharField(max_length=128, blank=True)
+    event_id = models.CharField(max_length=16, db_index=True)
+    event_name = models.CharField(max_length=128)
+    competitor_name = models.CharField(max_length=255)
+    competitor_wca_id = models.CharField(max_length=16, blank=True, db_index=True)
+    country_code = models.CharField(max_length=8, blank=True)
+    kind = models.CharField(max_length=8, choices=CanonicalResult.Kind.choices)
+    value = models.IntegerField()
+    formatted_result = models.CharField(max_length=128)
+    entered_at = models.DateTimeField(null=True, blank=True)
+    first_observed_at = models.DateTimeField()
+    last_observed_at = models.DateTimeField()
+    source_url = models.URLField(max_length=512, blank=True)
+    canonical_status = models.CharField(max_length=16, choices=CanonicalResult.Status.choices)
+    validation_status = models.CharField(
+        max_length=16, choices=CanonicalResult.ValidationStatus.choices
+    )
+    validation_reason = models.CharField(max_length=128, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["canonical_result_id", "revision"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["canonical_result", "revision"],
+                name="unique_canonical_result_revision",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["event_id", "kind", "entered_at", "first_observed_at"],
+                name="canonical_revision_time_idx",
+            )
+        ]
+
+    @property
+    def classification_at(self):
+        return self.entered_at or self.first_observed_at
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError("CanonicalResultRevision rows are immutable")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("CanonicalResultRevision rows are retained indefinitely")
+
+
+class ClassificationWork(models.Model):
+    """Durable per-revision classifier queue."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+        STALE = "stale", "Stale"
+
+    canonical_result_revision = models.OneToOneField(
+        CanonicalResultRevision,
+        on_delete=models.CASCADE,
+        related_name="classification_work",
+    )
+    canonical_result = models.ForeignKey(
+        CanonicalResult, on_delete=models.CASCADE, related_name="classification_work"
+    )
+    revision = models.PositiveIntegerField()
+    action = models.CharField(max_length=16, choices=CanonicalResultRevision.Action.choices)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    attempts = models.PositiveIntegerField(default=0)
+    claimed_by = models.CharField(max_length=128, blank=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    claim_expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["canonical_result", "revision"],
+                name="unique_classification_work_revision",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["status", "claim_expires_at", "created_at"],
+                name="classification_work_ready_idx",
+            ),
+            models.Index(
+                fields=["canonical_result", "revision", "status"],
+                name="classification_work_order_idx",
             ),
         ]
 
@@ -288,87 +380,261 @@ class ResultObservation(models.Model):
         ]
 
 
-class Achievement(models.Model):
-    """A classification attached to a canonical result, never a copied result."""
+class RecordLevel(models.TextChoices):
+    WORLD = "WR", "World record"
+    CONTINENTAL = "CR", "Continental record"
+    NATIONAL = "NR", "National record"
+    PERSONAL = "PR", "Personal record"
 
-    class Type(models.TextChoices):
-        WORLD = "WR", "World record"
-        CONTINENTAL = "CR", "Continental record"
-        NATIONAL = "NR", "National record"
-        PERSONAL = "PR", "Personal record"
 
-    class Status(models.TextChoices):
-        ACTIVE = "active", "Active"
-        WITHDRAWN = "withdrawn", "Withdrawn"
-
-    result = models.ForeignKey(
-        CanonicalResult, on_delete=models.CASCADE, related_name="achievements"
-    )
-    type = models.CharField(max_length=2, choices=Type.choices)
-    status = models.CharField(
-        max_length=16, choices=Status.choices, default=Status.ACTIVE
-    )
-    classification_reason = models.CharField(max_length=64)
-    source_claim_supported = models.BooleanField(default=False)
-    benchmark_value = models.IntegerField(null=True, blank=True)
-    classified_at = models.DateTimeField()
-    invalidated_at = models.DateTimeField(null=True, blank=True)
-    details = models.JSONField(default=dict)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+class _WideRecordValues(models.Model):
+    record_holder = models.CharField(max_length=128)
+    record_type = models.CharField(max_length=2, choices=RecordLevel.choices)
 
     class Meta:
-        ordering = ["-classified_at", "-id"]
+        abstract = True
+
+
+class BaselineRecordsSingle(_WideRecordValues):
+    class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["result", "type"], name="unique_achievement_per_result"
+                fields=["record_holder", "record_type"], name="unique_baseline_single_holder"
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["record_holder", "record_type"], name="baseline_single_holder_idx"
             )
         ]
 
 
-class QualificationDecision(models.Model):
-    """Policy output kept separate from mathematical/official classification."""
+class BaselineRecordsAverage(_WideRecordValues):
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["record_holder", "record_type"], name="unique_baseline_average_holder"
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["record_holder", "record_type"], name="baseline_average_holder_idx"
+            )
+        ]
 
-    achievement = models.OneToOneField(
-        Achievement, on_delete=models.CASCADE, related_name="qualification"
+
+class LiveRecordsSingle(_WideRecordValues):
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["record_holder", "record_type"], name="unique_live_single_holder"
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["record_holder", "record_type"], name="live_single_holder_idx"
+            )
+        ]
+
+
+class LiveRecordsAverage(_WideRecordValues):
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["record_holder", "record_type"], name="unique_live_average_holder"
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["record_holder", "record_type"], name="live_average_holder_idx"
+            )
+        ]
+
+
+# Declaring the repetitive fixed event fields here keeps the Python/SQL mapping in
+# one audited place while still producing ordinary concrete columns in migrations.
+from .event_columns import AVERAGE_EVENT_IDS, EVENT_FIELD_BY_ID, SINGLE_EVENT_IDS
+
+for _model in (BaselineRecordsSingle, LiveRecordsSingle):
+    for _event_id in SINGLE_EVENT_IDS:
+        _model.add_to_class(
+            EVENT_FIELD_BY_ID[_event_id],
+            models.IntegerField(null=True, blank=True, db_column=_event_id),
+        )
+for _model in (BaselineRecordsAverage, LiveRecordsAverage):
+    for _event_id in AVERAGE_EVENT_IDS:
+        _model.add_to_class(
+            EVENT_FIELD_BY_ID[_event_id],
+            models.IntegerField(null=True, blank=True, db_column=_event_id),
+        )
+
+
+class BaselineMetadata(models.Model):
+    export_generated_at = models.DateTimeField()
+    downloaded_at = models.DateTimeField()
+    source_filename = models.CharField(max_length=255)
+    source_version = models.CharField(max_length=255, blank=True)
+    rebuilt_at = models.DateTimeField()
+    absorbed_competition_ids = models.JSONField(default=list)
+    is_active = models.BooleanField(default=False, db_index=True)
+
+    class Meta:
+        ordering = ["-rebuilt_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["is_active"],
+                condition=models.Q(is_active=True),
+                name="single_active_baseline_metadata",
+            )
+        ]
+
+
+class ProcessedResult(models.Model):
+    """Frontend-facing, revision-level classification projection."""
+
+    canonical_result = models.ForeignKey(
+        CanonicalResult, on_delete=models.CASCADE, related_name="processed_results"
     )
-    show_on_homepage = models.BooleanField(default=False)
-    homepage_category = models.CharField(max_length=2, blank=True)
-    notification_eligible = models.BooleanField(default=False)
-    homepage_reason = models.CharField(max_length=128, blank=True)
-    notification_reason = models.CharField(max_length=128, blank=True)
-    evaluated_at = models.DateTimeField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-
-class RecordBenchmark(models.Model):
-    """Historical record entering live processing; accepted live results are replayed on top."""
-
-    class Level(models.TextChoices):
-        WORLD = "WR", "World"
-        CONTINENTAL = "CR", "Continental"
-        NATIONAL = "NR", "National"
-
-    level = models.CharField(max_length=2, choices=Level.choices)
-    event_id = models.CharField(max_length=16)
+    canonical_result_revision = models.OneToOneField(
+        CanonicalResultRevision,
+        on_delete=models.CASCADE,
+        related_name="processed_result",
+    )
+    canonical_revision = models.PositiveIntegerField()
+    identity_key = models.CharField(max_length=768)
+    wca_competition_id = models.CharField(max_length=64, blank=True, db_index=True)
+    competition_name = models.CharField(max_length=255)
+    competition_country_code = models.CharField(max_length=8, blank=True)
+    competition_start_date = models.DateField(null=True, blank=True)
+    competition_end_date = models.DateField(null=True, blank=True)
+    competition_timezone = models.CharField(max_length=64, blank=True)
+    competition_local_date = models.DateField(null=True, blank=True, db_index=True)
+    timezone_resolution_status = models.CharField(max_length=16, default="unresolved")
+    timezone_resolution_reason = models.CharField(max_length=64, blank=True)
+    round_id = models.CharField(max_length=64, blank=True)
+    round_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    round_name = models.CharField(max_length=128, blank=True)
+    event_id = models.CharField(max_length=16, db_index=True)
+    event_name = models.CharField(max_length=128)
+    competitor_name = models.CharField(max_length=255)
+    competitor_wca_id = models.CharField(max_length=16, blank=True, db_index=True)
+    country_code = models.CharField(max_length=8, blank=True)
     kind = models.CharField(max_length=8, choices=CanonicalResult.Kind.choices)
-    region_code = models.CharField(
-        max_length=64,
-        blank=True,
-        help_text="Empty for WR, continent name for CR, ISO country code for NR",
-    )
     value = models.IntegerField()
-    effective_at = models.DateTimeField(null=True, blank=True)
-    source = models.CharField(max_length=128, blank=True)
+    formatted_result = models.CharField(max_length=128)
+    entered_at = models.DateTimeField(null=True, blank=True)
+    first_observed_at = models.DateTimeField()
+    last_observed_at = models.DateTimeField()
+    source_url = models.URLField(max_length=512, blank=True)
+    canonical_status = models.CharField(max_length=16, choices=CanonicalResult.Status.choices)
+    validation_status = models.CharField(
+        max_length=16, choices=CanonicalResult.ValidationStatus.choices
+    )
+    validation_reason = models.CharField(max_length=128, blank=True)
+    classification_at = models.DateTimeField(db_index=True)
+    classified_at = models.DateTimeField()
+    is_valid_result = models.BooleanField(default=True, db_index=True)
+    invalidity_reason = models.CharField(max_length=64, blank=True)
+    replacement = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="replaced_results",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        ordering = ["-classification_at", "-canonical_result_id", "-canonical_revision"]
         constraints = [
             models.UniqueConstraint(
-                fields=["level", "event_id", "kind", "region_code"],
-                name="unique_record_benchmark_scope",
+                fields=["canonical_result", "canonical_revision"],
+                name="unique_processed_result_revision",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["event_id", "kind", "classification_at"],
+                name="processed_result_timeline_idx",
+            )
+        ]
+
+
+class ProcessedResultRecordLevel(models.Model):
+    class ClassificationOutcome(models.TextChoices):
+        NONE = "none", "No record"
+        BROKEN = "broken", "Broken"
+        TIED = "tied", "Tied"
+
+    class RecognitionStatus(models.TextChoices):
+        NOT_APPLICABLE = "not_applicable", "Not applicable"
+        RECOGNIZED = "recognized", "Recognized"
+        SUPERSEDED_SAME_ROUND = "superseded_same_round", "Superseded in same round"
+        SUPERSEDED_SAME_DAY = "superseded_same_day", "Superseded on same day"
+
+    class CeasedHoldingReason(models.TextChoices):
+        SELF_LATER_ROUND = "broken_by_self_later_round", "Broken by self in later round"
+        OTHER_LATER_ROUND = "broken_by_other_later_round", "Broken by other in later round"
+        SELF_OTHER_COMPETITION = (
+            "broken_by_self_other_competition",
+            "Broken by self at another competition",
+        )
+        OTHER_OTHER_COMPETITION = (
+            "broken_by_other_other_competition",
+            "Broken by other at another competition",
+        )
+
+    processed_result = models.ForeignKey(
+        ProcessedResult, on_delete=models.CASCADE, related_name="record_levels"
+    )
+    record_level = models.CharField(max_length=2, choices=RecordLevel.choices)
+    record_scope = models.CharField(max_length=128, blank=True, db_index=True)
+    classification_outcome = models.CharField(
+        max_length=16,
+        choices=ClassificationOutcome.choices,
+        default=ClassificationOutcome.NONE,
+    )
+    incumbent_value = models.IntegerField(null=True, blank=True)
+    recognition_status = models.CharField(
+        max_length=32,
+        choices=RecognitionStatus.choices,
+        default=RecognitionStatus.NOT_APPLICABLE,
+    )
+    is_shared_tie = models.BooleanField(default=False)
+    currently_holds = models.BooleanField(default=False, db_index=True)
+    ceased_holding_reason = models.CharField(
+        max_length=48, choices=CeasedHoldingReason.choices, blank=True
+    )
+    ceased_holding_by = models.ForeignKey(
+        ProcessedResult,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="record_levels_ceased",
+    )
+    superseded_by = models.ForeignKey(
+        ProcessedResult,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="record_levels_superseded",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["processed_result_id", "record_level"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["processed_result", "record_level"],
+                name="unique_processed_result_record_level",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["record_level", "record_scope", "classification_outcome"],
+                name="processed_level_scope_idx",
             )
         ]
 
@@ -405,7 +671,14 @@ class RecordValidation(models.Model):
         WCARecordSnapshot, on_delete=models.PROTECT, related_name="validations"
     )
     validator = models.CharField(max_length=32, choices=Validator.choices)
-    level = models.CharField(max_length=2, choices=RecordBenchmark.Level.choices)
+    level = models.CharField(
+        max_length=2,
+        choices=(
+            (RecordLevel.WORLD, "World"),
+            (RecordLevel.CONTINENTAL, "Continental"),
+            (RecordLevel.NATIONAL, "National"),
+        ),
+    )
     region_code = models.CharField(max_length=64, blank=True)
     result_value = models.IntegerField()
     benchmark_value = models.IntegerField()
@@ -422,25 +695,6 @@ class RecordValidation(models.Model):
             models.UniqueConstraint(
                 fields=["result", "validator", "level"],
                 name="unique_record_validation_per_validator_level",
-            )
-        ]
-
-
-class PersonalBestBaseline(models.Model):
-    competitor_wca_id = models.CharField(max_length=16)
-    event_id = models.CharField(max_length=16)
-    kind = models.CharField(max_length=8, choices=CanonicalResult.Kind.choices)
-    value = models.IntegerField()
-    effective_at = models.DateTimeField(null=True, blank=True)
-    source = models.CharField(max_length=128, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["competitor_wca_id", "event_id", "kind"],
-                name="unique_personal_best_baseline",
             )
         ]
 
@@ -539,6 +793,7 @@ class SubscriptionRound(models.Model):
     wca_competition_id = models.CharField(max_length=64)
     competition_name = models.CharField(max_length=255)
     competition_country_code = models.CharField(max_length=8, blank=True)
+    competition_timezone = models.CharField(max_length=64, blank=True)
     competition_start_date = models.DateField()
     competition_end_date = models.DateField()
     event_id = models.CharField(max_length=16)

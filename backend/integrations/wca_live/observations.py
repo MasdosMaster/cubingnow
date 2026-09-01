@@ -34,6 +34,7 @@ def result_observations(
         "wca_competition_id": target.wca_competition_id,
         "competition_name": target.competition_name,
         "competition_country_code": target.competition_country_code,
+        "competition_timezone": target.competition_timezone,
         "competition_start_date": target.competition_start_date,
         "competition_end_date": target.competition_end_date,
         "round_id": target.round_id,

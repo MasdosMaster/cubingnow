@@ -1,6 +1,8 @@
 databases:
   - name: cubingnow-db
-    plan: free
+    plan: 0.5c-1g
+    diskSizeGB: 10
+    storageAutoscalingEnabled: true
     region: frankfurt
     databaseName: cubingnow
     user: cubingnow
@@ -192,6 +194,30 @@ services:
         value: "60"
       - key: CUBINGCHINA_KEEPALIVE_SECONDS
         value: "55"
+
+  - type: cron
+    name: cubingnow-wca-export-refresh
+    runtime: python
+    plan: starter
+    region: frankfurt
+    schedule: "0 16 * * 2"
+    rootDir: backend
+    buildCommand: uv sync --frozen --no-dev
+    startCommand: until uv run python manage.py migrate --check; do sleep 5; done; uv run python manage.py refresh_wca_public_export
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          type: web
+          name: cubingnow-api
+          envVarKey: DJANGO_SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cubingnow-db
+          property: connectionString
+      - key: DJANGO_ALLOWED_HOSTS
+        value: api.cubingnow.com
 
   - type: cron
     name: cubingnow-weekend-attendance-sync

@@ -5,7 +5,9 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.records.classification_work import process_ready_work
 from apps.records.models import (
+    BaselineMetadata,
     CubingChinaCompetitionTarget,
     IngestionWorkerStatus,
     RecentRecordObservation,
@@ -16,13 +18,23 @@ from integrations.wca_live.schemas import RecordCandidate
 
 @pytest.mark.django_db
 def test_records_endpoint_returns_normalized_record():
+    now = timezone.now()
+    BaselineMetadata.objects.create(
+        export_generated_at=now,
+        downloaded_at=now,
+        source_filename="test-export.zip",
+        source_version="test",
+        rebuilt_at=now,
+        is_active=True,
+    )
     persist_record_candidate(
-        record_candidate(timezone.now()),
+        record_candidate(now),
         RecentRecordObservation.IngestionMethod.API_POLLING,
         {"api": True},
     )
+    process_ready_work("api-test", limit=10)
 
-    response = APIClient().get("/api/records/")
+    response = APIClient().get("/api/records/?level=WR")
 
     assert response.status_code == 200
     result = response.json()["results"][0]
@@ -30,6 +42,13 @@ def test_records_endpoint_returns_normalized_record():
     assert result["record_level"] == "WR"
     assert result["continent"] == "Europe"
     assert result["validation_status"] == "verified"
+    # The public category feed keeps the pre-redesign highest-level display
+    # policy, while callers can explicitly inspect the complete internal rows.
+    assert APIClient().get("/api/records/?level=CR").json()["results"] == []
+    history = APIClient().get(
+        "/api/records/?level=CR&include_history=true"
+    ).json()["results"]
+    assert history[0]["classification_outcome"] == "broken"
 
 
 def record_candidate(observed_at):

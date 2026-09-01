@@ -1,8 +1,6 @@
 from django.conf import settings
 from django.core import checks
 
-from .providers import push_provider_is_configured
-
 
 @checks.register(checks.Tags.security)
 def check_web_push_configuration(app_configs, **kwargs):
@@ -18,6 +16,8 @@ def check_web_push_configuration(app_configs, **kwargs):
         if not getattr(settings, name, "")
     ]
     if not missing:
+        from .providers import push_provider_is_configured
+
         if push_provider_is_configured():
             return []
         return [
