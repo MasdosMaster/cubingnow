@@ -4,7 +4,6 @@ from time import monotonic
 from django.db import transaction
 from django.utils import timezone
 
-from apps.records.classification_work import mark_classification_scopes_dirty
 from apps.records.models import IngestionRun
 
 from .api_client import WCALiveAPIClient
@@ -42,10 +41,7 @@ def poll_recent_records(endpoint: str, run: IngestionRun | None = None) -> dict:
             except Exception:
                 malformed += 1
                 logger.exception("api_record_processing_failed record_index=%d", index)
-        queued_scopes = mark_classification_scopes_dirty(
-            dirty_scopes,
-            observed_at=observed_at,
-        )
+        queued_scopes = len(dirty_scopes)
     duration = monotonic() - started
     logger.info(
         "api_poll_completed records_found=%d new_observations=%d duplicates_ignored=%d malformed=%d classification_scopes=%d duration_seconds=%.3f",

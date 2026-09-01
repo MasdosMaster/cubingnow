@@ -40,7 +40,7 @@ const payload = {
     metadata: { competitions: [{ slug: "test-open", competition_name: "Test Open", competition_start_date: "2026-08-09", competition_end_date: "2026-08-10", status: "active", connected: true, websocket: { message_queue_size: 1, peak_message_queue_size: 2, counters: { frames_received: 6 } } }] }
   },
   subscription_rounds: { discovered: 12, subscribed: 12, errors: 0 },
-  classification: { pending_scope_count: 0, claimed_scope_count: 0, failed_scope_count: 0, oldest_observation_lag_seconds: 0 },
+  classification: { pending_revision_count: 0, claimed_revision_count: 0, failed_revision_count: 0, oldest_observation_lag_seconds: 0 },
   notifications: { deliveries: {}, queued_count: 0, due_count: 0, active_endpoint_count: 5, events_last_24h: 2 },
   record_pipeline: { source_observation_count: 100, result_observation_count: 80, canonical_result_count: 70, active_achievement_count: 6 }
 };

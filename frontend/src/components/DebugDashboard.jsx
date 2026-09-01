@@ -175,7 +175,7 @@ function overallState(status, requestError) {
   const queues = Object.values(status.websocket_queues || {});
   const criticalQueue = queues.some((queue) => (queue.message_queue_size || 0) >= 100);
   const workerError = [status.api_polling, status.graphql_subscription, status.cubingchina_websocket].find((worker) => worker?.last_error);
-  if (criticalQueue || status.classification?.failed_scope_count || workerError) {
+  if (criticalQueue || status.classification?.failed_revision_count || workerError) {
     return { state: "critical", label: "Degraded", note: workerError?.last_error || "A pipeline needs attention" };
   }
   const warningQueue = queues.some((queue) => (queue.message_queue_size || 0) >= 25);
@@ -296,11 +296,11 @@ export function DebugDashboard() {
 
         <section className="debug-section split-section">
           <article className="debug-panel">
-            <div className="debug-panel-heading"><div><p className="debug-kicker">Durable work</p><h2>Classification</h2></div><StatusPill state={status?.classification?.failed_scope_count ? "critical" : status?.classification?.pending_scope_count ? "warning" : "healthy"}>{status?.classification?.failed_scope_count ? "failed" : "ready"}</StatusPill></div>
+            <div className="debug-panel-heading"><div><p className="debug-kicker">Durable work</p><h2>Classification</h2></div><StatusPill state={status?.classification?.failed_revision_count ? "critical" : status?.classification?.pending_revision_count ? "warning" : "healthy"}>{status?.classification?.failed_revision_count ? "failed" : "ready"}</StatusPill></div>
             <div className="panel-metrics">
-              <Metric label="Pending scopes" value={number(status?.classification?.pending_scope_count)} />
-              <Metric label="Claimed" value={number(status?.classification?.claimed_scope_count)} />
-              <Metric label="Failed" value={number(status?.classification?.failed_scope_count)} />
+              <Metric label="Pending revisions" value={number(status?.classification?.pending_revision_count)} />
+              <Metric label="Claimed" value={number(status?.classification?.claimed_revision_count)} />
+              <Metric label="Failed" value={number(status?.classification?.failed_revision_count)} />
               <Metric label="Oldest lag" value={`${number(Math.round(status?.classification?.oldest_observation_lag_seconds || 0))}s`} />
               <Metric label="Slowest recent" value={`${number(status?.classification?.max_last_duration_ms)}ms`} />
               <Metric label="Last completion" value={age(status?.classification?.last_completed_at)} />
