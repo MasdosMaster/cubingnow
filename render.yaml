@@ -1,6 +1,6 @@
 databases:
   - name: cubingnow-db
-    plan: 0.5c-1g
+    plan: 0.1c-256mb
     diskSizeGB: 10
     storageAutoscalingEnabled: true
     region: frankfurt
