@@ -145,11 +145,14 @@ than a special case.
 
 `/api/records/` keeps its path and now serializes `ProcessedResultRecordLevel`. It
 exposes canonical/revision linkage, mathematical outcome, recognition, tie/current
-holder state, ceased/superseded links, validity, timezone/local date, and the prior
-display fields. The default category feed retains the existing highest verified,
-recognized level per result; `include_history=true` exposes classified internal and
-historical level rows. Ordinary no-record processed rows remain stored but are
-omitted from the public record feed.
+holder state, ceased/superseded links, validity, timezone/local date, and display
+fields in nested `canonical_result`, `achievement`, `competitor`, `competition`,
+`event`, `round`, `result`, `timestamps`, `validation`, `sources`, and `notification`
+objects. Missing text metadata is represented as `null`; identifiers remain strings
+while `round.number` remains numeric. The default category feed retains the existing
+highest verified, recognized level per result; `include_history=true` exposes
+classified internal and historical level rows. Ordinary no-record processed rows
+remain stored but are omitted from the public record feed.
 
 Notification publication selects only the highest recognized WR/CR/NR child for a
 processed revision, preserving the existing no-PR policy and audience logic. Its

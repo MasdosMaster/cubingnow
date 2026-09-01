@@ -64,6 +64,10 @@ _Avoid_: Observation time, solve time
 The time CubingNow first receives particular source evidence. It may be later than Entry Time.
 _Avoid_: Entry time, record time
 
+**Classification Time**:
+The time CubingNow finishes classifying a Canonical Result revision into a Processed Result.
+_Avoid_: Detection time, Entry Time, Observation Time
+
 **Featured Competitor**:
 A competitor included in CubingNow's manually curated set, identified by WCA ID, whose attendance at upcoming competitions is highlighted.
 _Avoid_: Celebrity cuber, elite cuber

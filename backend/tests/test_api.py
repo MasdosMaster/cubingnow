@@ -38,17 +38,35 @@ def test_records_endpoint_returns_normalized_record():
 
     assert response.status_code == 200
     result = response.json()["results"][0]
-    assert result["formatted_result"] == "3.26"
-    assert result["record_level"] == "WR"
-    assert result["continent"] == "Europe"
-    assert result["validation_status"] == "verified"
+    assert set(result) == {
+        "id",
+        "canonical_result",
+        "achievement",
+        "competitor",
+        "competition",
+        "event",
+        "round",
+        "result",
+        "timestamps",
+        "validation",
+        "sources",
+        "notification",
+    }
+    assert result["result"]["formatted"] == "3.26"
+    assert result["achievement"]["level"] == "WR"
+    assert result["competitor"]["continent"] == "Europe"
+    assert result["validation"]["status"] == "verified"
+    assert result["round"] == {"id": "live-round-1", "number": 2, "name": "Final"}
+    assert result["timestamps"]["classified_at"].endswith("Z")
+    assert result["sources"]["pipelines"] == ["api_polling"]
+    assert "record_level" not in result
     # The public category feed keeps the pre-redesign highest-level display
     # policy, while callers can explicitly inspect the complete internal rows.
     assert APIClient().get("/api/records/?level=CR").json()["results"] == []
     history = APIClient().get(
         "/api/records/?level=CR&include_history=true"
     ).json()["results"]
-    assert history[0]["classification_outcome"] == "broken"
+    assert history[0]["achievement"]["outcome"] == "broken"
 
 
 def record_candidate(observed_at):
@@ -75,6 +93,7 @@ def record_candidate(observed_at):
         source_url="https://live.worldcubeassociation.org/competitions/live-competition-1/rounds/live-round-1",
         source_update_timestamp=observed_at,
         observed_at=observed_at,
+        round_number=2,
         attempts=(326, 410, 430),
         final_best=326,
         final_average=410,
