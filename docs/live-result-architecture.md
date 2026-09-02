@@ -60,8 +60,9 @@ stored round target when WCA Live's recent-record payload is itself ambiguous.
 ## Baseline and live record tables
 
 `BaselineRecordsSingle` and `BaselineRecordsAverage` are wide tables built from the
-authoritative ranking and result tables in the WCA Public Results Export v2 SQL
-archive. A row is a
+authoritative ranking and result tables in the WCA Public Results Export v2 TSV
+archive. The complete raw export is retained as text-preserving tables in the
+`wca_export` PostgreSQL schema. A row in a baseline table is a
 record holder/scope (`World`, continent name, country name, or WCA ID) and record
 type (WR, CR, NR, or PR); fixed nullable columns hold WCA integer values for every
 supported event. Single includes the complete configured event set. Average excludes
@@ -82,13 +83,16 @@ data and never enter this calculation.
 
 The deployment runs `refresh_wca_public_export` every Tuesday at 16:00 UTC. Download
 starts from WCA's public-export discovery API, requires a v2 export, follows only its
-`sql_url`, and streams the large ZIP to a temporary file. The parser validates the
-required SQL table schemas and reads selected values without executing the MariaDB
-dump against the application database. TSV and legacy v1 inputs are deliberately not
-supported. The format version and content hash are retained. Download and parsing
-finish before mutation. Installing the new baseline, switching active metadata,
-seeding live cells, and replaying live competitions share one database transaction,
-so a corrupt export or failed replay preserves the prior working state.
+`tsv_url`, and streams the large ZIP to a temporary file. Every TSV member is streamed
+with PostgreSQL `COPY` into `wca_export_next`; no complete table is materialized in
+Python memory. Raw columns remain text so the source snapshot is preserved without
+inventing an application-owned copy of the WCA schema. Required projection headers,
+non-empty tables, the v2 format version, row counts, and content hash are validated.
+PostgreSQL then derives the baseline tables from ranks, people, countries, continents,
+and results. Renaming `wca_export_next` to `wca_export`, switching active metadata,
+seeding live cells, and replaying unabsorbed live competitions share one transaction.
+A failed download, load, calculation, or replay therefore preserves the previous raw
+snapshot and baseline. An advisory lock also prevents overlapping refresh processes.
 
 ## Incremental classification and work ordering
 

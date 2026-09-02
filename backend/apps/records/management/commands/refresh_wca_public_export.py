@@ -5,7 +5,7 @@ from apps.records.baseline_export import refresh_wca_baseline
 
 
 class Command(BaseCommand):
-    help = "Download the WCA v2 SQL export and atomically rebuild record state"
+    help = "Stream the full WCA v2 TSV export into PostgreSQL and rebuild record state"
 
     def add_arguments(self, parser):
         parser.add_argument("--url", default=settings.WCA_PUBLIC_EXPORT_URL)

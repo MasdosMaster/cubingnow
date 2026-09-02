@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 from functools import lru_cache
 from pathlib import Path
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import F
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -133,11 +133,28 @@ def seed_live_records_from_baseline() -> None:
         (BaselineRecordsSingle, LiveRecordsSingle),
         (BaselineRecordsAverage, LiveRecordsAverage),
     ):
-        live_model.objects.all().delete()
         fields = [field.name for field in baseline_model._meta.fields if field.name != "id"]
-        live_model.objects.bulk_create(
-            [live_model(**{field: getattr(row, field) for field in fields}) for row in baseline_model.objects.all()]
-        )
+        if connection.vendor == "postgresql":
+            quote = connection.ops.quote_name
+            columns = [baseline_model._meta.get_field(field).column for field in fields]
+            column_list = ", ".join(quote(column) for column in columns)
+            with connection.cursor() as cursor:
+                cursor.execute(f"DELETE FROM {quote(live_model._meta.db_table)}")
+                cursor.execute(
+                    f"INSERT INTO {quote(live_model._meta.db_table)} ({column_list}) "
+                    f"SELECT {column_list} FROM {quote(baseline_model._meta.db_table)}"
+                )
+            continue
+
+        live_model.objects.all().delete()
+        batch = []
+        for row in baseline_model.objects.all().iterator(chunk_size=1000):
+            batch.append(live_model(**{field: getattr(row, field) for field in fields}))
+            if len(batch) == 1000:
+                live_model.objects.bulk_create(batch, batch_size=1000)
+                batch.clear()
+        if batch:
+            live_model.objects.bulk_create(batch, batch_size=1000)
 
 
 def _active_baseline_absorbed_competitions() -> set[str]:
