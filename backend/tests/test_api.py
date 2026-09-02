@@ -37,18 +37,80 @@ def test_records_endpoint_returns_normalized_record():
     response = APIClient().get("/api/records/?level=WR")
 
     assert response.status_code == 200
-    result = response.json()["results"][0]
-    assert result["formatted_result"] == "3.26"
-    assert result["record_level"] == "WR"
-    assert result["continent"] == "Europe"
-    assert result["validation_status"] == "verified"
+    payload = response.json()
+    assert set(payload) == {"count", "next", "previous", "results"}
+    result = payload["results"][0]
+    assert set(result) == {
+        "id",
+        "canonical_result",
+        "achievement",
+        "competitor",
+        "competition",
+        "event",
+        "round",
+        "result",
+        "timestamps",
+        "validation",
+        "sources",
+        "notification",
+    }
+    assert result["canonical_result"]["revision"]["number"] == 1
+    assert result["result"] == {
+        "kind": "single",
+        "raw": 326,
+        "formatted": "3.26",
+        "valid": True,
+        "invalidity_reason": None,
+    }
+    assert result["achievement"]["level"] == "WR"
+    assert set(result["achievement"]) == {
+        "level",
+        "scope",
+        "outcome",
+        "recognition",
+        "incumbent_value",
+        "holding",
+    }
+    assert result["competitor"] == {
+        "name": "Test Cuber",
+        "wca_id": "2026TEST01",
+        "country_code": "NL",
+        "continent": "Europe",
+    }
+    assert result["event"] == {"id": "333", "name": "3x3x3 Cube"}
+    assert result["round"] == {"id": "live-round-1", "number": 2, "name": "Final"}
+    assert result["competition"]["name"] == "Test Open 2026"
+    assert result["competition"]["wca_id"] == "TestOpen2026"
+    assert result["competition"]["timezone"] is None
+    assert result["validation"] == {
+        "status": "verified",
+        "reason": "trusted_source_observation",
+    }
+    assert result["timestamps"]["classified_at"].endswith("Z")
+    assert set(result["timestamps"]) == {
+        "entered_at",
+        "first_observed_at",
+        "last_observed_at",
+        "classified_at",
+    }
+    assert result["sources"]["pipelines"] == ["api_polling"]
+    assert result["sources"]["url"].startswith("https://live.worldcubeassociation.org/")
+    assert set(result["sources"]["claims"][0]) == {
+        "pipeline",
+        "record_tag",
+        "claim_trusted",
+        "result_evidence_trusted",
+        "timestamps",
+    }
+    assert result["notification"] == {"eligible": True, "reason": "eligible"}
+    assert "record_level" not in result
     # The public category feed keeps the pre-redesign highest-level display
     # policy, while callers can explicitly inspect the complete internal rows.
     assert APIClient().get("/api/records/?level=CR").json()["results"] == []
     history = APIClient().get(
         "/api/records/?level=CR&include_history=true"
     ).json()["results"]
-    assert history[0]["classification_outcome"] == "broken"
+    assert history[0]["achievement"]["outcome"] == "broken"
 
 
 def record_candidate(observed_at):
@@ -75,6 +137,7 @@ def record_candidate(observed_at):
         source_url="https://live.worldcubeassociation.org/competitions/live-competition-1/rounds/live-round-1",
         source_update_timestamp=observed_at,
         observed_at=observed_at,
+        round_number=2,
         attempts=(326, 410, 430),
         final_best=326,
         final_average=410,

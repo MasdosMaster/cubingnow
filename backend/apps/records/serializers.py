@@ -147,194 +147,202 @@ class RecentRecordObservationSerializer(serializers.ModelSerializer):
         return deltas
 
 
-class ProcessedResultRecordLevelSerializer(serializers.ModelSerializer):
-    canonical_result_id = serializers.IntegerField(
-        source="processed_result.canonical_result_id", read_only=True
+class NullableCharField(serializers.CharField):
+    """Represent absent text consistently as JSON null instead of an empty string."""
+
+    def to_representation(self, value):
+        return super().to_representation(value) or None
+
+
+class CanonicalRevisionReferenceSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="canonical_result_revision_id", read_only=True)
+    number = serializers.IntegerField(source="canonical_revision", read_only=True)
+
+
+class CanonicalResultReferenceSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source="canonical_result_id", read_only=True)
+    key = serializers.CharField(source="identity_key", read_only=True)
+    revision = CanonicalRevisionReferenceSerializer(source="*", read_only=True)
+
+
+class RecordHoldingSerializer(serializers.Serializer):
+    current = serializers.BooleanField(source="currently_holds", read_only=True)
+    shared_tie = serializers.BooleanField(source="is_shared_tie", read_only=True)
+    ceased_reason = NullableCharField(source="ceased_holding_reason", read_only=True)
+    ceased_by_processed_result_id = serializers.IntegerField(
+        source="ceased_holding_by_id", read_only=True, allow_null=True
     )
-    canonical_revision = serializers.IntegerField(
-        source="processed_result.canonical_revision", read_only=True
+    superseded_by_processed_result_id = serializers.IntegerField(
+        source="superseded_by_id", read_only=True, allow_null=True
     )
-    canonical_result_revision_id = serializers.IntegerField(
-        source="processed_result.canonical_result_revision_id", read_only=True
-    )
-    canonical_key = serializers.CharField(
-        source="processed_result.identity_key", read_only=True
-    )
-    status = serializers.SerializerMethodField()
-    validation_status = serializers.CharField(
-        source="processed_result.validation_status", read_only=True
-    )
-    validation_reason = serializers.CharField(
-        source="processed_result.validation_reason", read_only=True
-    )
-    wca_competition_id = serializers.CharField(
-        source="processed_result.wca_competition_id", read_only=True
-    )
-    competition_name = serializers.CharField(
-        source="processed_result.competition_name", read_only=True
-    )
-    competition_timezone = serializers.CharField(
-        source="processed_result.competition_timezone", read_only=True
-    )
-    competition_local_date = serializers.DateField(
-        source="processed_result.competition_local_date", read_only=True, allow_null=True
-    )
-    timezone_resolution_status = serializers.CharField(
-        source="processed_result.timezone_resolution_status", read_only=True
-    )
-    timezone_resolution_reason = serializers.CharField(
-        source="processed_result.timezone_resolution_reason", read_only=True
-    )
-    round_id = serializers.CharField(source="processed_result.round_id", read_only=True)
-    round_number = serializers.IntegerField(
-        source="processed_result.round_number", read_only=True, allow_null=True
-    )
-    round_name = serializers.CharField(source="processed_result.round_name", read_only=True)
-    event_id = serializers.CharField(source="processed_result.event_id", read_only=True)
-    event_name = serializers.CharField(source="processed_result.event_name", read_only=True)
-    competitor_name = serializers.CharField(
-        source="processed_result.competitor_name", read_only=True
-    )
-    competitor_wca_id = serializers.CharField(
-        source="processed_result.competitor_wca_id", read_only=True
-    )
-    country_code = serializers.CharField(
-        source="processed_result.country_code", read_only=True
-    )
+
+
+class RecordAchievementSerializer(serializers.Serializer):
+    level = serializers.CharField(source="record_level", read_only=True)
+    scope = NullableCharField(source="record_scope", read_only=True)
+    outcome = serializers.CharField(source="classification_outcome", read_only=True)
+    recognition = serializers.CharField(source="recognition_status", read_only=True)
+    incumbent_value = serializers.IntegerField(read_only=True, allow_null=True)
+    holding = RecordHoldingSerializer(source="*", read_only=True)
+
+
+class RecordCompetitorSerializer(serializers.Serializer):
+    name = serializers.CharField(source="competitor_name", read_only=True)
+    wca_id = NullableCharField(source="competitor_wca_id", read_only=True)
+    country_code = NullableCharField(read_only=True)
     continent = serializers.SerializerMethodField()
-    kind = serializers.CharField(source="processed_result.kind", read_only=True)
-    raw_result = serializers.IntegerField(source="processed_result.value", read_only=True)
-    formatted_result = serializers.CharField(
-        source="processed_result.formatted_result", read_only=True
+
+    @staticmethod
+    def get_continent(obj):
+        return continent_for_country_code(obj.country_code) or None
+
+
+class TimezoneResolutionSerializer(serializers.Serializer):
+    status = serializers.CharField(source="timezone_resolution_status", read_only=True)
+    reason = NullableCharField(source="timezone_resolution_reason", read_only=True)
+
+
+class RecordCompetitionSerializer(serializers.Serializer):
+    wca_id = NullableCharField(source="wca_competition_id", read_only=True)
+    name = serializers.CharField(source="competition_name", read_only=True)
+    timezone = NullableCharField(source="competition_timezone", read_only=True)
+    local_date = serializers.DateField(
+        source="competition_local_date", read_only=True, allow_null=True
     )
-    entered_at = serializers.DateTimeField(
-        source="processed_result.entered_at", read_only=True, allow_null=True
+    timezone_resolution = TimezoneResolutionSerializer(source="*", read_only=True)
+
+
+class RecordRoundSerializer(serializers.Serializer):
+    id = NullableCharField(source="round_id", read_only=True)
+    number = serializers.IntegerField(source="round_number", read_only=True, allow_null=True)
+    name = NullableCharField(source="round_name", read_only=True)
+
+
+class RecordEventSerializer(serializers.Serializer):
+    id = serializers.CharField(source="event_id", read_only=True)
+    name = serializers.CharField(source="event_name", read_only=True)
+
+
+class RecordResultSerializer(serializers.Serializer):
+    kind = serializers.CharField(read_only=True)
+    raw = serializers.IntegerField(source="value", read_only=True)
+    formatted = serializers.CharField(source="formatted_result", read_only=True)
+    valid = serializers.BooleanField(source="is_valid_result", read_only=True)
+    invalidity_reason = NullableCharField(read_only=True)
+
+
+class RecordTimestampsSerializer(serializers.Serializer):
+    entered_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    first_observed_at = serializers.DateTimeField(read_only=True)
+    last_observed_at = serializers.DateTimeField(read_only=True)
+    classified_at = serializers.DateTimeField(read_only=True)
+
+
+class RecordValidationSerializer(serializers.Serializer):
+    status = serializers.CharField(source="validation_status", read_only=True)
+    reason = NullableCharField(source="validation_reason", read_only=True)
+
+
+class SourceClaimTimestampsSerializer(serializers.Serializer):
+    entered_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    first_observed_at = serializers.DateTimeField(read_only=True)
+    last_observed_at = serializers.DateTimeField(read_only=True)
+
+
+class SourceClaimSerializer(serializers.Serializer):
+    pipeline = serializers.CharField(source="ingestion_method", read_only=True)
+    record_tag = NullableCharField(source="source_record_tag", read_only=True)
+    claim_trusted = serializers.BooleanField(source="source_claim_trusted", read_only=True)
+    result_evidence_trusted = serializers.BooleanField(read_only=True)
+    timestamps = SourceClaimTimestampsSerializer(source="*", read_only=True)
+
+
+class RecordSourcesSerializer(serializers.Serializer):
+    url = serializers.SerializerMethodField()
+    pipelines = serializers.SerializerMethodField()
+    claims = serializers.SerializerMethodField()
+
+    @staticmethod
+    def _observations(obj):
+        return sorted(
+            obj.processed_result.canonical_result.observations.all(),
+            key=lambda row: (row.ingestion_method, row.pk),
+        )
+
+    @staticmethod
+    def get_url(obj):
+        return obj.processed_result.source_url or None
+
+    def get_pipelines(self, obj):
+        return sorted({row.ingestion_method for row in self._observations(obj)})
+
+    def get_claims(self, obj):
+        return SourceClaimSerializer(self._observations(obj), many=True).data
+
+
+def _notification_eligible(obj):
+    trusted_result = (
+        obj.processed_result.is_valid_result
+        and obj.processed_result.validation_status == "verified"
+        and obj.processed_result.validation_reason == "trusted_source_observation"
     )
-    observed_at = serializers.DateTimeField(
-        source="processed_result.first_observed_at", read_only=True
+    independently_verified = getattr(obj, "_independently_verified", None)
+    if independently_verified is None:
+        independently_verified = obj.processed_result.canonical_result.record_validations.filter(
+            level=obj.record_level,
+            result_value=obj.processed_result.value,
+            status="verified",
+        ).exists()
+    return (
+        obj.processed_result.is_valid_result
+        and (trusted_result or independently_verified)
+        and obj.record_level in {"WR", "CR", "NR"}
+        and obj.recognition_status == "recognized"
+        and obj.classification_outcome != "none"
     )
-    detected_at = serializers.DateTimeField(
-        source="processed_result.classification_at", read_only=True
+
+
+class RecordNotificationSerializer(serializers.Serializer):
+    eligible = serializers.SerializerMethodField()
+    reason = serializers.SerializerMethodField()
+
+    @staticmethod
+    def get_eligible(obj):
+        return _notification_eligible(obj)
+
+    @staticmethod
+    def get_reason(obj):
+        return "eligible" if _notification_eligible(obj) else obj.recognition_status
+
+
+class ProcessedResultRecordLevelSerializer(serializers.ModelSerializer):
+    canonical_result = CanonicalResultReferenceSerializer(
+        source="processed_result", read_only=True
     )
-    source_url = serializers.CharField(source="processed_result.source_url", read_only=True)
-    sources = serializers.SerializerMethodField()
-    source_claims = serializers.SerializerMethodField()
-    is_valid_result = serializers.BooleanField(
-        source="processed_result.is_valid_result", read_only=True
-    )
-    invalidity_reason = serializers.CharField(
-        source="processed_result.invalidity_reason", read_only=True
-    )
-    homepage_reason = serializers.CharField(source="recognition_status", read_only=True)
-    notification_eligible = serializers.SerializerMethodField()
-    notification_reason = serializers.SerializerMethodField()
+    achievement = RecordAchievementSerializer(source="*", read_only=True)
+    competitor = RecordCompetitorSerializer(source="processed_result", read_only=True)
+    competition = RecordCompetitionSerializer(source="processed_result", read_only=True)
+    event = RecordEventSerializer(source="processed_result", read_only=True)
+    round = RecordRoundSerializer(source="processed_result", read_only=True)
+    result = RecordResultSerializer(source="processed_result", read_only=True)
+    timestamps = RecordTimestampsSerializer(source="processed_result", read_only=True)
+    validation = RecordValidationSerializer(source="processed_result", read_only=True)
+    sources = RecordSourcesSerializer(source="*", read_only=True)
+    notification = RecordNotificationSerializer(source="*", read_only=True)
 
     class Meta:
         model = ProcessedResultRecordLevel
         fields = [
             "id",
-            "canonical_result_id",
-            "canonical_revision",
-            "canonical_result_revision_id",
-            "canonical_key",
-            "record_level",
-            "status",
-            "record_scope",
-            "classification_outcome",
-            "recognition_status",
-            "incumbent_value",
-            "is_shared_tie",
-            "currently_holds",
-            "ceased_holding_reason",
-            "ceased_holding_by",
-            "superseded_by",
-            "is_valid_result",
-            "invalidity_reason",
-            "validation_status",
-            "validation_reason",
-            "wca_competition_id",
-            "competition_name",
-            "competition_timezone",
-            "competition_local_date",
-            "timezone_resolution_status",
-            "timezone_resolution_reason",
-            "round_id",
-            "round_number",
-            "round_name",
-            "event_id",
-            "event_name",
-            "competitor_name",
-            "competitor_wca_id",
-            "country_code",
-            "continent",
-            "kind",
-            "raw_result",
-            "formatted_result",
-            "entered_at",
-            "observed_at",
-            "detected_at",
-            "source_url",
+            "canonical_result",
+            "achievement",
+            "competitor",
+            "competition",
+            "event",
+            "round",
+            "result",
+            "timestamps",
+            "validation",
             "sources",
-            "source_claims",
-            "homepage_reason",
-            "notification_eligible",
-            "notification_reason",
+            "notification",
         ]
-
-    def get_continent(self, obj):
-        return continent_for_country_code(obj.processed_result.country_code)
-
-    @staticmethod
-    def get_status(obj):
-        return "active" if obj.processed_result.is_valid_result else "withdrawn"
-
-    @staticmethod
-    def get_sources(obj):
-        return sorted(
-            set(
-                obj.processed_result.canonical_result.observations.values_list(
-                    "ingestion_method", flat=True
-                )
-            )
-        )
-
-    @staticmethod
-    def get_source_claims(obj):
-        return [
-            {
-                "ingestion_method": row.ingestion_method,
-                "source_record_tag": row.source_record_tag or None,
-                "claim_trusted": row.source_claim_trusted,
-                "result_evidence_trusted": row.result_evidence_trusted,
-                "entered_at": row.entered_at,
-                "observed_at": row.last_observed_at,
-            }
-            for row in obj.processed_result.canonical_result.observations.all().order_by(
-                "ingestion_method", "pk"
-            )
-        ]
-
-    @staticmethod
-    def get_notification_eligible(obj):
-        trusted_result = (
-            obj.processed_result.is_valid_result
-            and obj.processed_result.validation_status == "verified"
-            and obj.processed_result.validation_reason == "trusted_source_observation"
-        )
-        independently_verified = getattr(obj, "_independently_verified", None)
-        if independently_verified is None:
-            independently_verified = obj.processed_result.canonical_result.record_validations.filter(
-                level=obj.record_level,
-                result_value=obj.processed_result.value,
-                status="verified",
-            ).exists()
-        return (
-            obj.processed_result.is_valid_result
-            and (trusted_result or independently_verified)
-            and obj.record_level in {"WR", "CR", "NR"}
-            and obj.recognition_status == "recognized"
-            and obj.classification_outcome != "none"
-        )
-
-    def get_notification_reason(self, obj):
-        return "eligible" if self.get_notification_eligible(obj) else obj.recognition_status

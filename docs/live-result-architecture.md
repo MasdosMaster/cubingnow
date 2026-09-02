@@ -148,12 +148,14 @@ than a special case.
 ## API and notifications
 
 `/api/records/` keeps its path and now serializes `ProcessedResultRecordLevel`. It
-exposes canonical/revision linkage, mathematical outcome, recognition, tie/current
-holder state, ceased/superseded links, validity, timezone/local date, and the prior
-display fields. The default category feed retains the existing highest verified,
-recognized level per result; `include_history=true` exposes classified internal and
-historical level rows. Ordinary no-record processed rows remain stored but are
-omitted from the public record feed.
+uses a deliberately nested response contract: `canonical_result`, `achievement`,
+`competitor`, `competition`, `event`, `round`, `result`, `timestamps`, `validation`,
+`sources`, and `notification`. Numeric-looking provider identifiers stay strings,
+round numbers stay numbers, and unavailable text is represented as JSON `null`.
+There are no duplicate flat aliases. The default category feed retains the existing
+highest verified, recognized level per result; `include_history=true` exposes
+classified internal and historical level rows. Ordinary no-record processed rows
+remain stored but are omitted from the public record feed.
 
 Notification publication selects only the highest recognized WR/CR/NR child for a
 processed revision, preserving the existing no-PR policy and audience logic. Its

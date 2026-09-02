@@ -9,22 +9,26 @@ afterEach(cleanup);
 
 const baseRecord = {
   id: 1,
-  record_level: "WR",
-  event_name: "3x3x3 Cube",
-  kind: "single",
-  formatted_result: "3.90",
-  raw_result: 390,
-  competitor_name: "Test Cuber",
-  country_code: "NL",
-  competitor_wca_id: "2020TEST01",
-  competition_name: "Test Open 2026",
-  wca_competition_id: "TestOpen2026",
-  round_name: "Final",
-  round_id: "round-1",
-  detected_at: "2026-08-08T12:00:00Z",
-  validation_status: "verified",
-  sources: ["api_polling", "graphql_subscription"],
-  source_url: "https://example.test/live",
+  achievement: { level: "WR" },
+  event: { id: "333", name: "3x3x3 Cube" },
+  result: { kind: "single", formatted: "3.90", raw: 390 },
+  competitor: {
+    name: "Test Cuber",
+    country_code: "NL",
+    continent: "Europe",
+    wca_id: "2020TEST01",
+  },
+  competition: { name: "Test Open 2026", wca_id: "TestOpen2026" },
+  round: { id: "round-1", number: 2, name: "Final" },
+  timestamps: {
+    entered_at: "2026-08-08T12:00:00Z",
+    first_observed_at: "2026-08-08T12:00:01Z",
+  },
+  validation: { status: "verified" },
+  sources: {
+    pipelines: ["api_polling", "graphql_subscription"],
+    url: "https://example.test/live",
+  },
 };
 
 it("renders canonical validation and all contributing sources", () => {
@@ -56,7 +60,11 @@ it.each([
       level="CR"
       loading={false}
       error=""
-      records={[{ ...baseRecord, record_level: "CR", continent }]}
+      records={[{
+        ...baseRecord,
+        achievement: { level: "CR" },
+        competitor: { ...baseRecord.competitor, continent },
+      }]}
     />
   );
 
