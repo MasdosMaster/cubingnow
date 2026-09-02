@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import logging
 import re
 import tempfile
 import zipfile
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from pathlib import PurePosixPath
+from time import perf_counter
 
 import httpx
 from django.conf import settings
@@ -28,6 +30,8 @@ from .models import (
     BaselineRecordsSingle,
 )
 
+logger = logging.getLogger(__name__)
+
 ACTIVE_EXPORT_SCHEMA = "wca_export"
 STAGING_EXPORT_SCHEMA = "wca_export_next"
 OLD_EXPORT_SCHEMA = "wca_export_old"
@@ -38,6 +42,7 @@ _TRUSTED_VALUE = re.compile(r"^[a-z0-9]+$")
 _TSV_PREFIXES = ("wca_export_", "wca_exports_")
 _COPY_CHUNK_SIZE = 1024 * 1024
 _COPY_QUOTE_BYTE = b"\x01"
+_DOWNLOAD_LOG_INTERVAL_BYTES = 50 * 1024 * 1024
 _REQUIRED_COLUMNS = {
     "continents": ("id", "name"),
     "countries": ("id", "name", "continent_id"),
@@ -230,6 +235,9 @@ def _copy_table(cursor, archive: zipfile.ZipFile, table: ExportTable) -> int:
 def _create_projection_indexes(cursor, manifest: ExportManifest) -> None:
     tables = {table.name: table for table in manifest.tables}
     for table_name, indexes in _INDEX_COLUMNS.items():
+        started_at = perf_counter()
+        created_count = 0
+        logger.info("wca_export_indexes_started table=%s", table_name)
         available = set(tables[table_name].columns)
         for number, columns in enumerate(indexes, start=1):
             if not set(columns) <= available:
@@ -240,7 +248,14 @@ def _create_projection_indexes(cursor, manifest: ExportManifest) -> None:
                 f"CREATE INDEX {_quote(index_name)} ON "
                 f"{_qualified(STAGING_EXPORT_SCHEMA, table_name)} ({column_list})"
             )
+            created_count += 1
         cursor.execute(f"ANALYZE {_qualified(STAGING_EXPORT_SCHEMA, table_name)}")
+        logger.info(
+            "wca_export_indexes_completed table=%s index_count=%s duration_seconds=%.3f",
+            table_name,
+            created_count,
+            perf_counter() - started_at,
+        )
 
 
 def load_tsv_archive_into_staging(
@@ -250,14 +265,31 @@ def load_tsv_archive_into_staging(
 
     row_counts: dict[str, int] = {}
     with connection.cursor() as cursor:
+        logger.info("wca_export_staging_schema_started schema=%s", STAGING_EXPORT_SCHEMA)
         _drop_schema(cursor, STAGING_EXPORT_SCHEMA)
         cursor.execute(f"CREATE SCHEMA {_quote(STAGING_EXPORT_SCHEMA)}")
         for table in manifest.tables:
-            row_counts[table.name] = _copy_table(cursor, archive, table)
+            started_at = perf_counter()
+            member_size = archive.getinfo(table.member_name).file_size
+            logger.info(
+                "wca_export_table_copy_started table=%s uncompressed_bytes=%s",
+                table.name,
+                member_size,
+            )
+            row_count = _copy_table(cursor, archive, table)
+            row_counts[table.name] = row_count
+            logger.info(
+                "wca_export_table_copy_completed table=%s rows=%s duration_seconds=%.3f",
+                table.name,
+                row_count,
+                perf_counter() - started_at,
+            )
         for required_table in _REQUIRED_COLUMNS:
             if row_counts[required_table] == 0:
                 raise ValueError(f"Required WCA TSV table {required_table!r} is empty")
+        logger.info("wca_export_indexing_started")
         _create_projection_indexes(cursor, manifest)
+        logger.info("wca_export_indexing_completed")
         cursor.execute(
             f"CREATE TABLE {_qualified(STAGING_EXPORT_SCHEMA, '_metadata')} ("
             "format_version text NOT NULL, export_generated_at timestamptz NOT NULL, "
@@ -278,6 +310,12 @@ def load_tsv_archive_into_staging(
                 timezone.now(),
                 json.dumps(row_counts, sort_keys=True),
             ],
+        )
+        logger.info(
+            "wca_export_staging_schema_completed schema=%s table_count=%s total_rows=%s",
+            STAGING_EXPORT_SCHEMA,
+            len(row_counts),
+            sum(row_counts.values()),
         )
     return row_counts
 
@@ -364,6 +402,8 @@ def _absorbed_competition_ids(cursor) -> list[str]:
 def activate_staged_export(manifest: ExportManifest):
     """Atomically swap schemas, replace baselines, and rebuild live projections."""
 
+    activation_started_at = perf_counter()
+    logger.info("wca_export_activation_started source_version=%s", manifest.source_version)
     with connection.cursor() as cursor:
         _drop_schema(cursor, OLD_EXPORT_SCHEMA)
 
@@ -383,13 +423,28 @@ def activate_staged_export(manifest: ExportManifest):
             cursor.execute(
                 baseline_projection_sql(BaselineRecordsSingle, "ranks_single", SINGLE_EVENT_IDS)
             )
+            single_count = cursor.rowcount
+            logger.info(
+                "wca_export_baseline_projection_completed kind=single rows=%s",
+                single_count,
+            )
             cursor.execute(f"DELETE FROM {_quote(BaselineRecordsAverage._meta.db_table)}")
             cursor.execute(
                 baseline_projection_sql(
                     BaselineRecordsAverage, "ranks_average", AVERAGE_EVENT_IDS
                 )
             )
+            average_count = cursor.rowcount
+            logger.info(
+                "wca_export_baseline_projection_completed kind=average rows=%s",
+                average_count,
+            )
+            logger.info("wca_export_absorbed_competitions_started")
             absorbed_competition_ids = _absorbed_competition_ids(cursor)
+            logger.info(
+                "wca_export_absorbed_competitions_completed count=%s",
+                len(absorbed_competition_ids),
+            )
 
         BaselineMetadata.objects.filter(is_active=True).update(is_active=False)
         metadata = BaselineMetadata.objects.create(
@@ -401,16 +456,27 @@ def activate_staged_export(manifest: ExportManifest):
             absorbed_competition_ids=absorbed_competition_ids,
             is_active=True,
         )
+        logger.info("wca_export_live_projection_rebuild_started")
         rebuild_live_records_after_baseline_refresh()
+        logger.info("wca_export_live_projection_rebuild_completed")
 
         with connection.cursor() as cursor:
             _drop_schema(cursor, OLD_EXPORT_SCHEMA)
+    logger.info(
+        "wca_export_activation_completed source_version=%s duration_seconds=%.3f",
+        manifest.source_version,
+        perf_counter() - activation_started_at,
+    )
     return metadata
 
 
 def _download_export(target, *, url: str, timeout: float) -> tuple[str, datetime, str]:
     downloaded_at = timezone.now()
     digest = hashlib.sha256()
+    started_at = perf_counter()
+    downloaded_bytes = 0
+    next_progress_log = _DOWNLOAD_LOG_INTERVAL_BYTES
+    logger.info("wca_export_download_discovery_started url=%s", url)
     with httpx.Client(timeout=timeout, follow_redirects=True) as client:
         archive_url = url
         if "/api/" in url:
@@ -421,8 +487,10 @@ def _download_export(target, *, url: str, timeout: float) -> tuple[str, datetime
             archive_url = str(payload.get("tsv_url") or "")
             if not archive_url:
                 raise ValueError("WCA export discovery response did not contain tsv_url")
+        logger.info("wca_export_download_started archive_url=%s", archive_url)
         with client.stream("GET", archive_url) as response:
             response.raise_for_status()
+            expected_bytes = int(response.headers.get("content-length") or 0)
             filename = response.url.path.rsplit("/", 1)[-1] or "WCA_export.tsv.zip"
             disposition = response.headers.get("content-disposition", "")
             if "filename=" in disposition:
@@ -432,7 +500,21 @@ def _download_export(target, *, url: str, timeout: float) -> tuple[str, datetime
             for chunk in response.iter_bytes():
                 digest.update(chunk)
                 target.write(chunk)
+                downloaded_bytes += len(chunk)
+                if downloaded_bytes >= next_progress_log:
+                    logger.info(
+                        "wca_export_download_progress downloaded_bytes=%s expected_bytes=%s",
+                        downloaded_bytes,
+                        expected_bytes,
+                    )
+                    next_progress_log = downloaded_bytes + _DOWNLOAD_LOG_INTERVAL_BYTES
     target.flush()
+    logger.info(
+        "wca_export_download_completed filename=%s downloaded_bytes=%s duration_seconds=%.3f",
+        filename,
+        downloaded_bytes,
+        perf_counter() - started_at,
+    )
     return filename, downloaded_at, digest.hexdigest()
 
 
@@ -441,10 +523,13 @@ def refresh_wca_baseline(*, url: str | None = None, timeout: float = 120.0):
 
     _require_postgresql()
     url = url or settings.WCA_PUBLIC_EXPORT_URL
+    refresh_started_at = perf_counter()
+    logger.info("wca_export_refresh_started url=%s", url)
     with tempfile.NamedTemporaryFile(suffix=".tsv.zip") as target:
         filename, downloaded_at, content_hash = _download_export(
             target, url=url, timeout=timeout
         )
+        logger.info("wca_export_archive_inspection_started filename=%s", filename)
         with zipfile.ZipFile(target.name) as archive:
             manifest = inspect_tsv_archive(
                 archive,
@@ -452,11 +537,23 @@ def refresh_wca_baseline(*, url: str | None = None, timeout: float = 120.0):
                 downloaded_at=downloaded_at,
                 content_hash=content_hash,
             )
+            logger.info(
+                "wca_export_archive_inspection_completed format_version=%s table_count=%s",
+                manifest.format_version,
+                len(manifest.tables),
+            )
             with _export_refresh_lock():
                 try:
                     load_tsv_archive_into_staging(archive, manifest)
-                    return activate_staged_export(manifest)
+                    metadata = activate_staged_export(manifest)
                 except Exception:
+                    logger.exception("wca_export_refresh_failed cleaning_staging_schema=true")
                     with connection.cursor() as cursor:
                         _drop_schema(cursor, STAGING_EXPORT_SCHEMA)
                     raise
+    logger.info(
+        "wca_export_refresh_completed source_version=%s duration_seconds=%.3f",
+        metadata.source_version,
+        perf_counter() - refresh_started_at,
+    )
+    return metadata

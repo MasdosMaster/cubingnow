@@ -239,9 +239,10 @@ def test_projection_sql_builds_all_scopes_and_only_safe_fixed_event_columns():
     assert 'AS "333mbf"' not in average_sql
 
 
-def test_refresh_discovers_and_streams_the_current_v2_tsv_zip(monkeypatch):
+def test_refresh_discovers_streams_and_logs_the_current_v2_tsv_zip(monkeypatch):
     archive_bytes = export_tsv_zip()
     calls = []
+    logs = []
 
     class Response:
         headers = {}
@@ -292,13 +293,21 @@ def test_refresh_discovers_and_streams_the_current_v2_tsv_zip(monkeypatch):
         return {table.name: 1 for table in manifest.tables}
 
     def activate(manifest):
-        return SimpleNamespace(source_filename=manifest.source_filename)
+        return SimpleNamespace(
+            source_filename=manifest.source_filename,
+            source_version=manifest.source_version,
+        )
 
     monkeypatch.setattr(baseline_export.httpx, "Client", Client)
     monkeypatch.setattr(baseline_export, "_require_postgresql", lambda: None)
     monkeypatch.setattr(baseline_export, "_export_refresh_lock", nullcontext)
     monkeypatch.setattr(baseline_export, "load_tsv_archive_into_staging", load)
     monkeypatch.setattr(baseline_export, "activate_staged_export", activate)
+    monkeypatch.setattr(
+        baseline_export.logger,
+        "info",
+        lambda message, *args: logs.append(message % args),
+    )
 
     metadata = refresh_wca_baseline(
         url="https://www.worldcubeassociation.org/api/v0/export/public"
@@ -309,6 +318,12 @@ def test_refresh_discovers_and_streams_the_current_v2_tsv_zip(monkeypatch):
     assert not any("sql" in str(call) for call in calls)
     assert "events" in loaded["tables"]
     assert metadata.source_filename == "WCA_export_v2_test.tsv.zip"
+    assert any(message.startswith("wca_export_refresh_started") for message in logs)
+    assert any(message.startswith("wca_export_download_completed") for message in logs)
+    assert any(
+        message.startswith("wca_export_archive_inspection_completed") for message in logs
+    )
+    assert any(message.startswith("wca_export_refresh_completed") for message in logs)
 
 
 def test_non_postgresql_refresh_fails_before_downloading():

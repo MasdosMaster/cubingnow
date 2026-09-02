@@ -198,7 +198,7 @@ services:
   - type: cron
     name: cubingnow-wca-export-refresh
     runtime: python
-    plan: starter
+    plan: standard
     region: frankfurt
     schedule: "0 16 * * 2"
     rootDir: backend

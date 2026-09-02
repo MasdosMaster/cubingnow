@@ -205,6 +205,11 @@ LOGGING = {
             "level": os.getenv("CUBINGNOW_LOG_LEVEL", "INFO"),
             "propagate": False,
         },
+        "apps.records.baseline_export": {
+            "handlers": ["console"],
+            "level": os.getenv("CUBINGNOW_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
         "apps.competitors": {
             "handlers": ["console"],
             "level": os.getenv("CUBINGNOW_LOG_LEVEL", "INFO"),
