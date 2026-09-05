@@ -192,7 +192,7 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 .record-competitor { display: flex; align-items: center; gap: 9px; min-width: 0; color: #254c9d; }
 .record-competitor > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .country-flag { flex: 0 0 auto; font-size: 20px; }
-.country-flag-rounded { border-radius: .5rem; }
+.country-flag-rounded { border-radius: .35rem; }
 .record-country-detail,
 .competitor-country { display: flex !important; align-items: center; gap: 6px; }
 .compact-detected-age { color: #f22720; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
