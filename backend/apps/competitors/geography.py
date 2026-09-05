@@ -1,4 +1,10 @@
+import json
+from functools import lru_cache
+from pathlib import Path
+
 import pycountry
+
+REFERENCE_DATA = Path(__file__).resolve().parents[2] / "reference_data"
 
 CONTINENTS = (
     "Africa",
@@ -291,6 +297,17 @@ COUNTRY_NAME_ALIASES = {
     "Venezuela": "VE",
     "Vietnam": "VN",
 }
+
+
+@lru_cache(maxsize=1)
+def _countries() -> dict:
+    with (REFERENCE_DATA / "countries.json").open(encoding="utf-8") as file:
+        return json.load(file)["countries"]
+
+
+def country_names_for_country_code(country_code: str | None) -> tuple[str, str]:
+    country = _countries().get((country_code or "").upper(), {})
+    return country.get("display_name", ""), country.get("wca_name", "")
 
 
 def normalise_continent(value: str | None) -> str:

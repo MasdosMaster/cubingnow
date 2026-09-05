@@ -30,7 +30,7 @@ def test_records_endpoint_returns_normalized_record():
         is_active=True,
     )
     persist_record_candidate(
-        record_candidate(now),
+        replace(record_candidate(now), country_code="TW"),
         RecentRecordObservation.IngestionMethod.API_POLLING,
         {"api": True},
     )
@@ -76,8 +76,10 @@ def test_records_endpoint_returns_normalized_record():
     assert result["competitor"] == {
         "name": "Test Cuber",
         "wca_id": "2026TEST01",
-        "country_code": "NL",
-        "continent": "Europe",
+        "country_code": "TW",
+        "country_display_name": "Taiwan",
+        "country_wca_name": "Chinese Taipei",
+        "continent": "Asia",
     }
     assert result["event"] == {"id": "333", "name": "3x3x3 Cube"}
     assert result["round"] == {"id": "live-round-1", "number": 2, "name": "Final"}

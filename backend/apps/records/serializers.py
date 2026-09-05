@@ -1,7 +1,10 @@
 from rest_framework import serializers
 
 from apps.competitions.serializers import CompetitionSerializer
-from apps.competitors.geography import continent_for_country_code
+from apps.competitors.geography import (
+    continent_for_country_code,
+    country_names_for_country_code,
+)
 from apps.competitors.serializers import CompetitorSerializer
 
 from .models import ProcessedResultRecordLevel, RecentRecordObservation, Record
@@ -190,7 +193,19 @@ class RecordCompetitorSerializer(serializers.Serializer):
     name = serializers.CharField(source="competitor_name", read_only=True)
     wca_id = NullableCharField(source="competitor_wca_id", read_only=True)
     country_code = NullableCharField(read_only=True)
+    country_display_name = serializers.SerializerMethodField()
+    country_wca_name = serializers.SerializerMethodField()
     continent = serializers.SerializerMethodField()
+
+    @staticmethod
+    def get_country_display_name(obj):
+        display_name, _wca_name = country_names_for_country_code(obj.country_code)
+        return display_name or None
+
+    @staticmethod
+    def get_country_wca_name(obj):
+        _display_name, wca_name = country_names_for_country_code(obj.country_code)
+        return wca_name or None
 
     @staticmethod
     def get_continent(obj):
