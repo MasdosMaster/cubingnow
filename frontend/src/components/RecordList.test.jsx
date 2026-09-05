@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { formatDetectedAge } from "../utils/formatDetectedAge";
+import { formatCompactDetectedAge, formatDetectedAge } from "../utils/formatDetectedAge";
 import { RecordList } from "./RecordList";
 
 const now = new Date("2026-08-05T12:00:00Z");
@@ -18,6 +18,18 @@ describe("formatDetectedAge", () => {
     ["2026-08-04T08:00:00Z", "1d4h ago"],
   ])("formats %s as %s", (detectedAt, expected) => {
     expect(formatDetectedAge(detectedAt, now)).toBe(expected);
+  });
+});
+
+describe("formatCompactDetectedAge", () => {
+  it.each([
+    ["2026-08-05T07:47:00Z", "4h ago"],
+    ["2026-07-22T14:00:00Z", "13d ago"],
+    ["2026-07-14T22:00:00Z", "21d ago"],
+    ["2026-07-30T04:00:00Z", "6d ago"],
+    ["2026-08-05T11:47:30Z", "12m ago"],
+  ])("formats %s as %s", (detectedAt, expected) => {
+    expect(formatCompactDetectedAge(detectedAt, now)).toBe(expected);
   });
 });
 

@@ -32,12 +32,18 @@ const baseRecord = {
 };
 
 it("renders only the requested compact row fields and the real event icon", () => {
-  render(<AchievementList level="WR" loading={false} error="" records={[baseRecord]} />);
+  render(<AchievementList level="WR" loading={false} error="" records={[
+    baseRecord,
+    { ...baseRecord, id: 2, result: { ...baseRecord.result, kind: "average" } },
+  ]} />);
 
-  const row = screen.getByRole("row");
+  const row = screen.getAllByRole("row")[0];
   expect(within(row).getByRole("img", { name: "3x3x3 Cube icon" }).getAttribute("src")).toBe("/event_icons/333.svg");
   expect(within(row).getByText("3.90")).toBeTruthy();
-  expect(within(row).getByText("Single")).toBeTruthy();
+  expect(within(row).getByText("Sgl")).toBeTruthy();
+  expect(screen.getByText("Avg")).toBeTruthy();
+  expect(screen.queryByText("Single")).toBeNull();
+  expect(screen.queryByText("Average")).toBeNull();
   expect(within(row).getByText("Test Cuber")).toBeTruthy();
   expect(within(row).getByText("🇳🇱")).toBeTruthy();
   expect(screen.queryByText("verified")).toBeNull();

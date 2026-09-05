@@ -1,4 +1,4 @@
-import { formatDetectedAge } from "../utils/formatDetectedAge";
+import { formatCompactDetectedAge } from "../utils/formatDetectedAge";
 
 function flag(code = "") {
   if (!/^[a-z]{2}$/i.test(code)) return code;
@@ -24,7 +24,7 @@ const ROW_LIMITS = {
 };
 
 function resultKind(kind = "") {
-  return kind ? `${kind.charAt(0).toUpperCase()}${kind.slice(1)}` : "—";
+  return { single: "Sgl", average: "Avg" }[kind] || kind || "—";
 }
 
 function BellIcon() {
@@ -68,7 +68,7 @@ export function AchievementList({ level, records, loading, error }) {
                       <span>{record.competitor.name}</span>
                     </span>
                     <time className="compact-detected-age" dateTime={timestamp} role="cell" title={absoluteTime(timestamp)}>
-                      {formatDetectedAge(timestamp)}
+                      {formatCompactDetectedAge(timestamp)}
                     </time>
                   </article>
                 );

@@ -392,7 +392,7 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
   .notification-link { min-width: 104px; height: 38px; padding: 0 8px; font-size: 11px; }
   .notification-link svg { width: 16px; height: 16px; }
   .record-card-content { padding-right: 10px; padding-left: 10px; }
-  .compact-record-row { grid-template-columns: 27px minmax(49px, .55fr) minmax(55px, .65fr) minmax(68px, 1.4fr) auto; gap: 7px; font-size: 11px; }
+  .compact-record-row { grid-template-columns: 27px minmax(56px, .55fr) 29px minmax(0, 1.75fr) 40px; gap: 7px; font-size: 11px; }
   .event-icon,
   .event-icon img { width: 24px; height: 24px; }
   .compact-result { font-size: 13px; }
