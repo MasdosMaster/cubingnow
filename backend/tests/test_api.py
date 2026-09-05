@@ -5,9 +5,11 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.records.classification import seed_live_records_from_baseline
 from apps.records.classification_work import process_ready_work
 from apps.records.models import (
     BaselineMetadata,
+    BaselineRecordsSingle,
     CubingChinaCompetitionTarget,
     IngestionWorkerStatus,
     RecentRecordObservation,
@@ -111,6 +113,59 @@ def test_records_endpoint_returns_normalized_record():
         "/api/records/?level=CR&include_history=true"
     ).json()["results"]
     assert history[0]["achievement"]["outcome"] == "broken"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("level", "value"),
+    [
+        ("CR", 150),
+        ("NR", 250),
+        ("PR", 350),
+    ],
+)
+def test_records_endpoint_shows_highest_qualifying_non_world_level(level, value):
+    now = timezone.now()
+    BaselineMetadata.objects.create(
+        export_generated_at=now,
+        downloaded_at=now,
+        source_filename="test-export.zip",
+        source_version="test",
+        rebuilt_at=now,
+        is_active=True,
+    )
+    BaselineRecordsSingle.objects.create(
+        record_holder="World", record_type="WR", event_333=100
+    )
+    BaselineRecordsSingle.objects.create(
+        record_holder="Europe", record_type="CR", event_333=200
+    )
+    BaselineRecordsSingle.objects.create(
+        record_holder="Netherlands", record_type="NR", event_333=300
+    )
+    BaselineRecordsSingle.objects.create(
+        record_holder="2026TEST01", record_type="PR", event_333=400
+    )
+    seed_live_records_from_baseline()
+    candidate = replace(
+        record_candidate(now),
+        raw_result=value,
+        final_best=value,
+    )
+    persist_record_candidate(
+        candidate,
+        RecentRecordObservation.IngestionMethod.API_POLLING,
+        {"api": True},
+    )
+    process_ready_work("api-test", limit=10)
+
+    response = APIClient().get(f"/api/records/?level={level}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["count"] == 1
+    assert payload["results"][0]["achievement"]["level"] == level
+    assert payload["results"][0]["result"]["raw"] == value
 
 
 def record_candidate(observed_at):

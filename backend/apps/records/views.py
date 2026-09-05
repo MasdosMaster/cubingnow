@@ -86,16 +86,20 @@ class RecordViewSet(ReadOnlyModelViewSet):
                 "PR": ("WR", "CR", "NR"),
             }.get(level, ())
             if higher_levels and not include_history:
-                queryset = queryset.exclude(
-                    processed_result__record_levels__record_level__in=higher_levels,
-                    processed_result__record_levels__classification_outcome__in=[
+                higher_recognized_level = ProcessedResultRecordLevel.objects.filter(
+                    processed_result_id=OuterRef("processed_result_id"),
+                    record_level__in=higher_levels,
+                    classification_outcome__in=[
                         ProcessedResultRecordLevel.ClassificationOutcome.BROKEN,
                         ProcessedResultRecordLevel.ClassificationOutcome.TIED,
                     ],
-                    processed_result__record_levels__recognition_status=(
+                    recognition_status=(
                         ProcessedResultRecordLevel.RecognitionStatus.RECOGNIZED
                     ),
                 )
+                queryset = queryset.annotate(
+                    _has_higher_recognized_level=Exists(higher_recognized_level)
+                ).filter(_has_higher_recognized_level=False)
         if query:
             queryset = queryset.filter(
                 Q(processed_result__competitor_name__icontains=query)
