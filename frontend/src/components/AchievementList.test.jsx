@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 
 import { AchievementList } from "./AchievementList";
@@ -31,43 +31,33 @@ const baseRecord = {
   },
 };
 
-it("renders canonical validation and all contributing sources", () => {
-  render(
-    <AchievementList
-      level="WR"
-      loading={false}
-      error=""
-      records={[baseRecord]}
-    />
-  );
+it("renders only the requested compact row fields and the real event icon", () => {
+  render(<AchievementList level="WR" loading={false} error="" records={[baseRecord]} />);
 
-  expect(screen.getByText("verified")).toBeTruthy();
-  expect(screen.getByText("api polling")).toBeTruthy();
-  expect(screen.getByText("graphql subscription")).toBeTruthy();
-  expect(screen.getByText("single")).toBeTruthy();
+  const row = screen.getByRole("row");
+  expect(within(row).getByRole("img", { name: "3x3x3 Cube icon" }).getAttribute("src")).toBe("/event_icons/333.svg");
+  expect(within(row).getByText("3.90")).toBeTruthy();
+  expect(within(row).getByText("Single")).toBeTruthy();
+  expect(within(row).getByText("Test Cuber")).toBeTruthy();
+  expect(within(row).getByText("🇳🇱")).toBeTruthy();
+  expect(screen.queryByText("verified")).toBeNull();
+  expect(screen.queryByText("api polling")).toBeNull();
+  expect(screen.queryByText("Test Open 2026")).toBeNull();
+  expect(screen.queryByText("2020TEST01")).toBeNull();
+  expect(screen.getByRole("link", { name: "Get notified" }).getAttribute("href")).toBe("/notificationsettings");
 });
 
-it.each([
-  ["North America", "NAR"],
-  ["South America", "SAR"],
-  ["Europe", "ER"],
-  ["Asia", "AsR"],
-  ["Africa", "AfR"],
-  ["Oceania", "OcR"],
-])("renders the %s continental record label as %s", (continent, label) => {
+it("uses the competitor country flag for continental records", () => {
   render(
     <AchievementList
       level="CR"
       loading={false}
       error=""
-      records={[{
-        ...baseRecord,
-        achievement: { level: "CR" },
-        competitor: { ...baseRecord.competitor, continent },
-      }]}
+      records={[{ ...baseRecord, achievement: { level: "CR" } }]}
     />
   );
 
-  expect(screen.getByText(label)).toBeTruthy();
-  expect(screen.queryByText("CR")).toBeNull();
+  expect(screen.getByText("🇳🇱")).toBeTruthy();
+  expect(screen.getByText("CR")).toBeTruthy();
+  expect(screen.queryByText("ER")).toBeNull();
 });

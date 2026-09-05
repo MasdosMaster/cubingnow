@@ -1,89 +1,126 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 
+function record(id, level, name = `Cuber ${id}`) {
+  return {
+    id: `${level}-${id}`,
+    achievement: { level },
+    event: { id: "333", name: "3x3x3 Cube" },
+    result: { kind: id % 2 ? "single" : "average", formatted: `${id}.00`, raw: id * 100 },
+    competitor: { name, country_code: "NL", continent: "Europe", wca_id: `2026TEST${id}` },
+    competition: { name: "Test Open", wca_id: "TestOpen2026" },
+    round: { id: "round-1", name: "Final" },
+    timestamps: { entered_at: "2026-09-05T12:00:00Z", first_observed_at: "2026-09-05T12:00:01Z" },
+    validation: { status: "verified" },
+    sources: { pipelines: ["api_polling"], url: "https://example.test/live" },
+  };
+}
+
+function recordsFetch() {
+  return vi.fn(async (url) => {
+    const request = new URL(url, "https://cubingnow.test");
+    const level = request.searchParams.get("level");
+    const counts = { WR: 8, CR: 8, NR: 15 };
+    return {
+      ok: true,
+      json: async () => ({
+        results: Array.from({ length: counts[level] || 0 }, (_, index) => (
+          record(index + 1, level, request.searchParams.get("q") ? "Filtered Cuber" : undefined)
+        )),
+      }),
+    };
+  });
+}
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   window.history.replaceState({}, "", "/");
+  window.localStorage.clear();
+  delete document.documentElement.dataset.theme;
 });
 
-
 describe("homepage", () => {
-  it("renders canonical achievement tables and links to the debug dashboard", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url) => {
-      if (url.includes("ingestion-status")) {
-        return { ok: true, json: async () => ({}) };
-      }
-      if (url.includes("competing-this-weekend")) {
-        return {
-          ok: true,
-          json: async () => ({
-            window: { start_date: "2026-08-05", end_date: "2026-08-11" },
-            sync_status: "fresh",
-            continents: ["Africa", "Asia", "Europe", "North America", "South America", "Oceania"],
-            results: []
-          })
-        };
-      }
-      return { ok: true, json: async () => ({ results: [] }) };
-    }));
+  it("renders only the limited WR, CR, and NR cards without requesting PR or weekend competitors", async () => {
+    const fetchMock = recordsFetch();
+    vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await screen.findByRole("heading", { name: "Competing this weekend" });
 
-    await waitFor(() => {
-      const headings = Array.from(document.querySelectorAll("main h2")).map((node) => node.textContent);
-      expect(headings).toEqual([
-        "Record alerts",
-        "World records",
-        "Continental records",
-        "National records",
-        "Personal records",
-        "Competing this weekend"
-      ]);
-    });
-    expect(screen.getByRole("link", { name: "Debug" }).getAttribute("href")).toBe("/debug");
+    const world = await screen.findByRole("table", { name: "World Records" });
+    const continental = await screen.findByRole("table", { name: "Continental Records" });
+    const national = await screen.findByRole("table", { name: "National Records" });
+
+    expect(within(world).getAllByRole("row")).toHaveLength(6);
+    expect(within(continental).getAllByRole("row")).toHaveLength(6);
+    expect(within(national).getAllByRole("row")).toHaveLength(13);
+    expect(screen.queryByText("Personal Records")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Competing now" })).toBeTruthy();
+    expect(screen.queryByText("Competing this weekend")).toBeNull();
+
+    const requestedUrls = fetchMock.mock.calls.map(([url]) => url);
+    expect(requestedUrls).toHaveLength(3);
+    expect(requestedUrls.some((url) => url.includes("level=PR"))).toBe(false);
+    expect(requestedUrls.some((url) => url.includes("competing-this-weekend"))).toBe(false);
   });
 
-  it("uses the newly backend-ranked payload when a continent filter changes", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url) => {
-      if (url.includes("ingestion-status")) {
-        return { ok: true, json: async () => ({}) };
-      }
-      if (url.includes("competing-this-weekend")) {
-        const europe = url.includes("continent=Europe");
-        return {
-          ok: true,
-          json: async () => ({
-            window: { start_date: "2026-08-05", end_date: "2026-08-11" },
-            sync_status: "fresh",
-            continents: ["Africa", "Asia", "Europe", "North America", "South America", "Oceania"],
-            results: [{
-              rank: europe ? 1 : 7,
-              wca_id: europe ? "2020EURO01" : "2020WORLD01",
-              name: europe ? "Europe Result" : "All Result",
-              country_code: europe ? "NL" : "US",
-              continent: europe ? "Europe" : "North America",
-              competitions: []
-            }]
-          })
-        };
-      }
-      return { ok: true, json: async () => ({ results: [] }) };
-    }));
+  it("keeps filtering, navigation placeholders, notification links, debug access, and theme behavior", async () => {
+    const fetchMock = recordsFetch();
+    vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    await screen.findByText("All Result");
-    fireEvent.click(screen.getByRole("button", { name: "Europe" }));
+    await screen.findByRole("table", { name: "World Records" });
 
-    expect(await screen.findByText("Europe Result")).toBeTruthy();
+    const filter = screen.getByPlaceholderText("Filter for cuber, competition, country, continent, record, event, or time");
+    fireEvent.change(filter, { target: { value: "Max Park" } });
+    await waitFor(() => {
+      const filteredRequests = fetchMock.mock.calls.filter(([url]) => url.includes("q=Max+Park"));
+      expect(filteredRequests).toHaveLength(3);
+    });
+    expect(await screen.findAllByText("Filtered Cuber")).toHaveLength(25);
+
+    const unfinished = screen.getByRole("button", { name: "Competitions" });
+    fireEvent.click(unfinished);
+    expect(window.location.pathname).toBe("/");
+    expect(document.getElementById(unfinished.getAttribute("aria-describedby")).textContent).toBe("Coming soon");
+
+    const notificationLinks = screen.getAllByRole("link", { name: "Get notified" });
+    expect(notificationLinks).toHaveLength(3);
+    notificationLinks.forEach((link) => expect(link.getAttribute("href")).toBe("/notificationsettings"));
+    expect(screen.getByRole("link", { name: "Debug" }).getAttribute("href")).toBe("/debug");
+
+    const themeButton = screen.getByRole("button", { name: "Use dark mode" });
+    fireEvent.click(themeButton);
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(window.localStorage.getItem("cubingnow-theme")).toBe("dark");
+  });
+
+  it("keeps the competing placeholder static and free of competitor data", async () => {
+    vi.stubGlobal("fetch", recordsFetch());
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Competing now" });
+    expect(screen.getByText("Live competition data will be available here later.")).toBeTruthy();
     expect(screen.queryByText("All Result")).toBeNull();
-    expect(screen.getByRole("button", { name: "Europe" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("1")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "See all competing" })).toBeTruthy();
+  });
+});
+
+describe("public routes", () => {
+  it("renders the existing notification settings at /notificationsettings", async () => {
+    window.history.replaceState({}, "", "/notificationsettings");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: "Record alerts" })).toBeTruthy();
+    expect(await screen.findByText("This browser does not currently expose Web Push.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Debug" }).getAttribute("href")).toBe("/debug");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
