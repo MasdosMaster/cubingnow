@@ -45,6 +45,8 @@ describe("WeekendCompetitorList", () => {
     expect(screen.getByRole("heading", { name: "Competing this weekend" })).toBeTruthy();
     expect(screen.getByText("Accepted registrations · 5 Aug – 11 Aug 2026")).toBeTruthy();
     expect(screen.getByText("Alice Alpha")).toBeTruthy();
+    expect(document.querySelector(".country-flag.fi.fi-nl.country-flag-rounded")).toBeTruthy();
+    expect(screen.queryByText("🇳🇱")).toBeNull();
     expect(screen.getByText("One Open")).toBeTruthy();
     expect(screen.getByText("Two Open")).toBeTruthy();
     expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");

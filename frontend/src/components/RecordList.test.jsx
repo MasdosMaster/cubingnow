@@ -64,4 +64,6 @@ it("renders a source-aware CubingChina link", () => {
   );
   const link = screen.getByRole("link", { name: "CubingChina ↗" });
   expect(link.getAttribute("href")).toContain("cubing.com/live/China-Open-2026");
+  expect(document.querySelector(".country-flag.fi.fi-nl.country-flag-rounded")).toBeTruthy();
+  expect(screen.queryByText("🇳🇱")).toBeNull();
 });

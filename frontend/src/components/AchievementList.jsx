@@ -1,11 +1,5 @@
 import { formatCompactDetectedAge } from "../utils/formatDetectedAge";
-
-function flag(code = "") {
-  if (!/^[a-z]{2}$/i.test(code)) return code;
-  return code.toUpperCase().replace(/./g, (character) =>
-    String.fromCodePoint(127397 + character.charCodeAt())
-  );
-}
+import { CountryFlag } from "./CountryFlag";
 
 function absoluteTime(value) {
   return value ? new Date(value).toLocaleString() : "Unknown";
@@ -64,7 +58,7 @@ export function AchievementList({ level, records, loading, error }) {
                     <strong className="compact-result" role="cell">{record.result.formatted || record.result.raw}</strong>
                     <span className="result-kind" role="cell">{resultKind(record.result.kind)}</span>
                     <span className="record-competitor" role="cell">
-                      <span aria-hidden="true" className="country-flag">{flag(record.competitor.country_code)}</span>
+                      <CountryFlag code={record.competitor.country_code} />
                       <span>{record.competitor.name}</span>
                     </span>
                     <time className="compact-detected-age" dateTime={timestamp} role="cell" title={absoluteTime(timestamp)}>

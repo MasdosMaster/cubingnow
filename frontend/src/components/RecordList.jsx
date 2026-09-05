@@ -1,11 +1,5 @@
 import { formatDetectedAge } from "../utils/formatDetectedAge";
-
-function flag(code = "") {
-  if (!/^[a-z]{2}$/i.test(code)) return code;
-  return code.toUpperCase().replace(/./g, (character) =>
-    String.fromCodePoint(127397 + character.charCodeAt())
-  );
-}
+import { CountryFlag } from "./CountryFlag";
 
 function absoluteTime(value) {
   return value ? new Date(value).toLocaleString() : "Never";
@@ -58,7 +52,10 @@ export function RecordList({ title, subtitle, records, loading, error, worker, r
                   <div><span className={`level level-${record.record_level.toLowerCase()}`}>{record.record_level}</span>{record.status === "withdrawn" && <small>corrected</small>}</div>
                   <div><strong>{record.event_name}</strong><small>{record.kind}</small></div>
                   <strong className="result">{record.formatted_result || record.raw_result}</strong>
-                  <div><strong>{record.competitor_name}</strong><small>{flag(record.country_code)} {record.competitor_wca_id}</small></div>
+                  <div>
+                    <strong>{record.competitor_name}</strong>
+                    <small className="record-country-detail"><CountryFlag code={record.country_code} /> <span>{record.competitor_wca_id}</span></small>
+                  </div>
                   <div><strong>{record.competition_name}</strong><small>{record.wca_competition_id}</small></div>
                   <div><strong>{record.round_name || "—"}</strong><small>{record.round_id || ""}</small></div>
                   <time className="detected-age" dateTime={record.source_update_timestamp || record.detected_at} title={absoluteTime(record.source_update_timestamp || record.detected_at)}>

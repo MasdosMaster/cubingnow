@@ -45,7 +45,8 @@ it("renders only the requested compact row fields and the real event icon", () =
   expect(screen.queryByText("Single")).toBeNull();
   expect(screen.queryByText("Average")).toBeNull();
   expect(within(row).getByText("Test Cuber")).toBeTruthy();
-  expect(within(row).getByText("🇳🇱")).toBeTruthy();
+  expect(row.querySelector(".country-flag.fi.fi-nl.country-flag-rounded")).toBeTruthy();
+  expect(within(row).queryByText("🇳🇱")).toBeNull();
   expect(screen.queryByText("verified")).toBeNull();
   expect(screen.queryByText("api polling")).toBeNull();
   expect(screen.queryByText("Test Open 2026")).toBeNull();
@@ -63,7 +64,23 @@ it("uses the competitor country flag for continental records", () => {
     />
   );
 
-  expect(screen.getByText("🇳🇱")).toBeTruthy();
+  expect(document.querySelector(".country-flag.fi.fi-nl.country-flag-rounded")).toBeTruthy();
+  expect(screen.queryByText("🇳🇱")).toBeNull();
   expect(screen.getByText("CR")).toBeTruthy();
   expect(screen.queryByText("ER")).toBeNull();
+});
+
+it("keeps Nepal's non-rectangular flag unrounded like CubingStats", () => {
+  render(
+    <AchievementList
+      level="NR"
+      loading={false}
+      error=""
+      records={[{ ...baseRecord, competitor: { ...baseRecord.competitor, country_code: "NP" } }]}
+    />
+  );
+
+  const flag = document.querySelector(".country-flag.fi.fi-np");
+  expect(flag).toBeTruthy();
+  expect(flag.classList.contains("country-flag-rounded")).toBe(false);
 });

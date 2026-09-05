@@ -2,6 +2,7 @@ import {
   attendanceDateLabel,
   formatAttendanceWindow
 } from "../utils/formatAttendanceWindow";
+import { CountryFlag } from "./CountryFlag";
 
 const DEFAULT_CONTINENTS = [
   "Africa",
@@ -11,13 +12,6 @@ const DEFAULT_CONTINENTS = [
   "South America",
   "Oceania"
 ];
-
-function flag(code = "") {
-  if (!/^[a-z]{2}$/i.test(code)) return code;
-  return code.toUpperCase().replace(/./g, (character) =>
-    String.fromCodePoint(127397 + character.charCodeAt())
-  );
-}
 
 function competitionUrl(competition) {
   if (competition.wca_id) {
@@ -113,7 +107,7 @@ export function WeekendCompetitorList({
                   <small>{competitor.wca_id}</small>
                 </div>
                 <div role="cell">
-                  <strong>{flag(competitor.country_code)} {competitor.country_code}</strong>
+                  <strong className="competitor-country"><CountryFlag code={competitor.country_code} /> <span>{competitor.country_code}</span></strong>
                   <small>{competitor.continent}</small>
                 </div>
                 <ul className="competition-attendance-list" role="cell">

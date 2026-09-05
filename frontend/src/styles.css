@@ -191,7 +191,10 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 .result-kind { overflow: hidden; color: #6681bb; text-overflow: ellipsis; white-space: nowrap; }
 .record-competitor { display: flex; align-items: center; gap: 9px; min-width: 0; color: #254c9d; }
 .record-competitor > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.country-flag { flex: 0 0 auto; font-size: 20px; line-height: 1; }
+.country-flag { flex: 0 0 auto; font-size: 20px; }
+.country-flag-rounded { border-radius: .5rem; }
+.record-country-detail,
+.competitor-country { display: flex !important; align-items: center; gap: 6px; }
 .compact-detected-age { color: #f22720; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .record-card-error { margin: 7px 0; padding: 8px 10px; border-radius: 8px; color: #991b1b; background: #fee2e2; font-size: 11px; }
 .record-card-state { display: flex; min-height: 150px; margin: 0; padding: 32px 16px; align-items: center; justify-content: center; flex-direction: column; color: #64748b; text-align: center; }
