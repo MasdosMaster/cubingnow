@@ -75,7 +75,7 @@ describe("homepage", () => {
     render(<App />);
     await screen.findByRole("table", { name: "World Records" });
 
-    const filter = screen.getByPlaceholderText("Filter for cuber, competition, country, continent, record, event, or time");
+    const filter = screen.getByPlaceholderText("Filter for name, event, competition, country, or continent");
     fireEvent.change(filter, { target: { value: "Max Park" } });
     await waitFor(() => {
       const filteredRequests = fetchMock.mock.calls.filter(([url]) => url.includes("q=Max+Park"));

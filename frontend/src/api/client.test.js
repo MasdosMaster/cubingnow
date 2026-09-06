@@ -16,6 +16,17 @@ describe("getRecords", () => {
     expect(fetch).toHaveBeenCalledWith("/api/records/?level=WR");
   });
 
+  it("forwards comma-separated record filters intact", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ count: 0, results: [] })
+    }));
+
+    await getRecords({ level: "NR", query: "7x7, argen" });
+
+    expect(fetch).toHaveBeenCalledWith("/api/records/?level=NR&q=7x7%2C+argen");
+  });
+
   it("fetches one ingestion pipeline explicitly", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,

@@ -9,6 +9,7 @@ from apps.competitors.geography import (
 )
 from apps.competitors.serializers import CompetitorSerializer
 
+from .event_search import event_other_search_terms
 from .models import ProcessedResultRecordLevel, RecentRecordObservation, Record
 
 
@@ -268,6 +269,11 @@ class RecordRoundSerializer(serializers.Serializer):
 class RecordEventSerializer(serializers.Serializer):
     id = serializers.CharField(source="event_id", read_only=True)
     name = serializers.CharField(source="event_name", read_only=True)
+    other_search_terms = serializers.SerializerMethodField()
+
+    @staticmethod
+    def get_other_search_terms(obj):
+        return list(event_other_search_terms(obj.event_id))
 
 
 class RecordResultSerializer(serializers.Serializer):

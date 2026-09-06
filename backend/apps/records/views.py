@@ -8,6 +8,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
+from apps.competitors.geography import country_codes_matching_search_term
 from apps.notifications.models import (
     NotificationDelivery,
     NotificationEndpoint,
@@ -15,6 +16,7 @@ from apps.notifications.models import (
 )
 from integrations.weekend_window import resolve_weekend_window
 
+from .event_search import event_ids_matching_other_search_terms
 from .models import (
     CanonicalResult,
     ClassificationWork,
@@ -101,12 +103,24 @@ class RecordViewSet(ReadOnlyModelViewSet):
                     _has_higher_recognized_level=Exists(higher_recognized_level)
                 ).filter(_has_higher_recognized_level=False)
         if query:
-            queryset = queryset.filter(
-                Q(processed_result__competitor_name__icontains=query)
-                | Q(processed_result__competitor_wca_id__icontains=query)
-                | Q(processed_result__event_name__icontains=query)
-                | Q(processed_result__competition_name__icontains=query)
-            )
+            terms = (term.strip() for term in query.split(","))
+            for term in (term for term in terms if term):
+                country_codes = country_codes_matching_search_term(term)
+                event_ids = event_ids_matching_other_search_terms(term)
+                term_query = (
+                    Q(processed_result__competitor_name__icontains=term)
+                    | Q(processed_result__event_id__icontains=term)
+                    | Q(processed_result__event_name__icontains=term)
+                    | Q(processed_result__country_code__icontains=term)
+                    | Q(processed_result__wca_competition_id__icontains=term)
+                    | Q(processed_result__competition_name__icontains=term)
+                    | Q(processed_result__kind__icontains=term)
+                )
+                if country_codes:
+                    term_query |= Q(processed_result__country_code__in=country_codes)
+                if event_ids:
+                    term_query |= Q(processed_result__event_id__in=event_ids)
+                queryset = queryset.filter(term_query)
         return queryset.distinct()
 
 

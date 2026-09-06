@@ -141,7 +141,7 @@ function HomePage() {
           <input
             aria-label="Search records"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter for cuber, competition, country, continent, record, event, or time"
+            placeholder="Filter for name, event, competition, country, or continent"
             type="search"
             value={query}
           />

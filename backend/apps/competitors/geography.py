@@ -310,6 +310,20 @@ def country_names_for_country_code(country_code: str | None) -> tuple[str, str]:
     return country.get("display_name", ""), country.get("wca_name", "")
 
 
+def country_codes_matching_search_term(term: str) -> tuple[str, ...]:
+    candidate = term.strip().casefold()
+    if not candidate:
+        return ()
+    return tuple(
+        country_code
+        for country_code, country in _countries().items()
+        if any(
+            candidate in (country.get(field) or "").casefold()
+            for field in ("display_name", "wca_name", "continent")
+        )
+    )
+
+
 def normalise_continent(value: str | None) -> str:
     candidate = (value or "").removeprefix("_").strip()
     return candidate if candidate in CONTINENTS else ""

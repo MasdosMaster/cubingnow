@@ -85,7 +85,11 @@ def test_records_endpoint_returns_normalized_record():
         "country_wca_name": "Chinese Taipei",
         "continent": "Asia",
     }
-    assert result["event"] == {"id": "333", "name": "3x3x3 Cube"}
+    assert result["event"] == {
+        "id": "333",
+        "name": "3x3x3 Cube",
+        "other_search_terms": ["small cubes", "nxnxn"],
+    }
     assert result["round"] == {"id": "live-round-1", "number": 2, "name": "Final"}
     assert result["competition"]["name"] == "Test Open 2026"
     assert result["competition"]["wca_id"] == "TestOpen2026"
@@ -119,6 +123,53 @@ def test_records_endpoint_returns_normalized_record():
         "/api/records/?level=CR&include_history=true"
     ).json()["results"]
     assert history[0]["achievement"]["outcome"] == "broken"
+
+
+@pytest.mark.django_db
+def test_records_endpoint_searches_defined_fields_and_combines_comma_terms():
+    now = timezone.now()
+    BaselineMetadata.objects.create(
+        export_generated_at=now,
+        downloaded_at=now,
+        source_filename="test-export.zip",
+        source_version="test",
+        rebuilt_at=now,
+        is_active=True,
+    )
+    persist_record_candidate(
+        replace(record_candidate(now), country_code="AR"),
+        RecentRecordObservation.IngestionMethod.API_POLLING,
+        {"api": True},
+    )
+    process_ready_work("api-test", limit=10)
+    client = APIClient()
+
+    matching_queries = (
+        "test cub",
+        "333",
+        "3x3x3",
+        "small cub",
+        "ar",
+        "argentina",
+        "south amer",
+        "testopen",
+        "test open",
+        "sing",
+        " 3X3 , , argen, ",
+    )
+    for query in matching_queries:
+        response = client.get("/api/records/", {"level": "WR", "q": query})
+        assert response.status_code == 200
+        assert response.json()["count"] == 1, query
+
+    non_matching_queries = (
+        "3x3, netherlands",
+        "2026TEST01",
+    )
+    for query in non_matching_queries:
+        response = client.get("/api/records/", {"level": "WR", "q": query})
+        assert response.status_code == 200
+        assert response.json()["count"] == 0, query
 
 
 @pytest.mark.parametrize(
