@@ -150,6 +150,10 @@ function HomePage() {
           <h1 id="homepage-intro-title">Live speedcubing, all in one place.</h1>
           <p>CubingNow combines live competition data from the WCA, WCA Live, and CubingChina with official WCA data to bring you live results, records, rankings, and statistics for you and other cubers.</p>
         </section>
+        <aside className="beta-notice" aria-label="Beta notice">
+          <InfoIcon />
+          <p><strong>CubingNow is currently in beta.</strong> New features and data sources are being added regularly.</p>
+        </aside>
         <div className="homepage-filter">
           <SearchIcon />
           <input
@@ -160,10 +164,6 @@ function HomePage() {
             value={query}
           />
         </div>
-        <aside className="beta-notice" aria-label="Beta notice">
-          <InfoIcon />
-          <p><strong>CubingNow is currently in beta.</strong> New features and data sources are being added regularly.</p>
-        </aside>
         <div className="homepage-dashboard">
           {levels.map((item) => <PublicAchievementSection key={item} level={item} query={query} />)}
           <CompetingNow />

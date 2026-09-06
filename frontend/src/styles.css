@@ -164,12 +164,12 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 .homepage-intro { margin-bottom: 20px; }
 .homepage-intro h1 { margin: 0; color: #070b42; font-size: clamp(28px, 2.2vw, 32px); font-weight: 750; line-height: 1.15; letter-spacing: -.025em; }
 .homepage-intro p { max-width: 1180px; margin: 6px 0 0; color: #60739b; font-size: 17px; font-weight: 400; line-height: 1.4; }
-.homepage-filter { display: flex; align-items: center; gap: 14px; height: 54px; margin-bottom: 10px; padding: 0 17px; border: 1px solid #d7e0ec; border-radius: 12px; color: #4e6391; background: #fff; box-shadow: 0 2px 8px rgb(15 23 42 / .025); }
+.homepage-filter { display: flex; align-items: center; gap: 14px; height: 54px; margin-bottom: 20px; padding: 0 17px; border: 1px solid #d7e0ec; border-radius: 12px; color: #4e6391; background: #fff; box-shadow: 0 2px 8px rgb(15 23 42 / .025); }
 .homepage-filter > svg { flex: 0 0 auto; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 1.8; }
 .homepage-filter input[type="search"] { flex: 1; width: auto; min-width: 0; height: 100%; padding: 0; border: 0; border-radius: 0; outline: 0; color: #172554; background: transparent; }
 .homepage-filter input[type="search"]::placeholder { color: #7894d0; opacity: 1; }
 .homepage-filter:focus-within { border-color: #60a5fa; box-shadow: 0 0 0 3px rgb(96 165 250 / .14); }
-.beta-notice { display: flex; align-items: center; gap: 10px; min-height: 38px; margin-bottom: 20px; padding: 7px 13px; border: 1px solid #cbdcf3; border-radius: 10px; color: #52688f; background: #f5f9ff; font-size: 13px; line-height: 1.4; }
+.beta-notice { display: flex; align-items: center; gap: 10px; min-height: 38px; margin-bottom: 10px; padding: 7px 13px; border: 1px solid #cbdcf3; border-radius: 10px; color: #52688f; background: #f5f9ff; font-size: 13px; line-height: 1.4; }
 .beta-notice svg { width: 18px; height: 18px; flex: 0 0 auto; color: #4da9ee; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .beta-notice p { margin: 0; }
 .beta-notice strong { color: #172554; font-weight: 700; }
@@ -410,9 +410,9 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
   .homepage-intro { margin-bottom: 16px; }
   .homepage-intro h1 { font-size: clamp(24px, 7vw, 26px); line-height: 1.18; }
   .homepage-intro p { margin-top: 6px; font-size: 16px; line-height: 1.38; }
-  .homepage-filter { height: 50px; margin-bottom: 10px; padding: 0 13px; }
+  .homepage-filter { height: 50px; margin-bottom: 14px; padding: 0 13px; }
   .homepage-filter input[type="search"] { font-size: 13px; }
-  .beta-notice { align-items: flex-start; margin-bottom: 14px; padding: 8px 11px; font-size: 12px; }
+  .beta-notice { align-items: flex-start; margin-bottom: 10px; padding: 8px 11px; font-size: 12px; }
   .beta-notice svg { margin-top: 1px; }
   .homepage-dashboard { grid-template-areas: "wr" "cr" "nr" "competing"; grid-template-columns: minmax(0, 1fr); }
   .record-card,
