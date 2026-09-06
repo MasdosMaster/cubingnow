@@ -489,6 +489,73 @@ class BaselineMetadata(models.Model):
         ]
 
 
+class HistoricalResult(models.Model):
+    """One rankable WCA result, dated by the competition end date for now."""
+
+    class Kind(models.TextChoices):
+        SINGLE = "single", "Single"
+        AVERAGE = "average", "Average"
+
+    result_id = models.BigIntegerField()
+    kind = models.CharField(max_length=8, choices=Kind.choices)
+    attempt_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    value = models.IntegerField()
+    person_id = models.CharField(max_length=16)
+    event_id = models.CharField(max_length=16)
+    country_id = models.CharField(max_length=64)
+    competition_id = models.CharField(max_length=64)
+    # The public v2 export currently omits results.round_id. Keep the provenance
+    # slot so it can be populated if the upstream export starts providing it.
+    round_id = models.CharField(max_length=64, null=True, blank=True)
+    round_type_id = models.CharField(max_length=8)
+    achieved_date = models.DateField()
+
+    class Meta:
+        db_table = "historical_results"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(kind__in=["single", "average"]),
+                name="hist_valid_kind",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(value__gt=0),
+                name="hist_positive_value",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(kind="average", attempt_number__isnull=True)
+                    | models.Q(
+                        kind="single",
+                        attempt_number__isnull=False,
+                        attempt_number__gte=1,
+                        attempt_number__lte=5,
+                    )
+                ),
+                name="hist_kind_attempt_shape",
+            ),
+            models.UniqueConstraint(
+                fields=["result_id", "attempt_number"],
+                condition=models.Q(kind="single"),
+                name="hist_unique_single_attempt",
+            ),
+            models.UniqueConstraint(
+                fields=["result_id"],
+                condition=models.Q(kind="average"),
+                name="hist_unique_average",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["person_id", "event_id", "kind", "achieved_date"],
+                name="hist_person_event_date_idx",
+            ),
+            models.Index(
+                fields=["event_id", "kind", "achieved_date", "value"],
+                name="hist_event_kind_date_value_idx",
+            ),
+        ]
+
+
 class ProcessedResult(models.Model):
     """Frontend-facing, revision-level classification projection."""
 

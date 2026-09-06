@@ -94,6 +94,16 @@ seeding live cells, and replaying unabsorbed live competitions share one transac
 A failed download, load, calculation, or replay therefore preserves the previous raw
 snapshot and baseline. An advisory lock also prevents overlapping refresh processes.
 
+After that activation succeeds, the same refresh process bulk-builds
+`historical_results_next` from the v2 `result_attempts`, `results`, and `competitions`
+tables. Positive attempts become singles and positive `results.average` values become
+averages; `results.best` is deliberately not projected. Secondary and partial unique
+indexes are added after loading, sanity checks run, and one transaction renames the
+replacement to `historical_results`. The previous live table is left untouched if any
+build or validation step fails. `achieved_date` is intentionally the competition end
+date for now. The public v2 export does not currently expose `results.round_id`, so that
+nullable provenance column remains empty while `round_type_id` is retained.
+
 ## Incremental classification and work ordering
 
 `ClassificationWork` is the only classifier queue. It is unique per immutable

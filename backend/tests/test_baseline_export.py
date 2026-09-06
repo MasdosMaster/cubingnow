@@ -64,11 +64,73 @@ def export_tsv_zip(*, format_version="v2.0.2", overrides=None) -> bytes:
                 ["2020TIEE01", "333", "900", "1", "1", "1"],
             ],
         ),
-        "results": _tsv(
-            ["id", "competition_id", "event_id", "person_id"],
+        "competitions": _tsv(
+            ["id", "name", "end_year", "end_month", "end_day"],
             [
-                ["1", "IncludedOpen2026", "333", "2020TEST01"],
-                ["2", "DnfOnlyOpen2026", "333", "2020TIEE01"],
+                ["IncludedOpen2026", "Included Open 2026", "2026", "8", "30"],
+                ["DnfOnlyOpen2026", "DNF Only Open 2026", "2026", "8", "31"],
+            ],
+        ),
+        "results": _tsv(
+            [
+                "id",
+                "pos",
+                "best",
+                "average",
+                "competition_id",
+                "round_type_id",
+                "event_id",
+                "person_name",
+                "person_id",
+                "format_id",
+                "regional_single_record",
+                "regional_average_record",
+                "person_country_id",
+            ],
+            [
+                [
+                    "1",
+                    "1",
+                    "900",
+                    "1000",
+                    "IncludedOpen2026",
+                    "f",
+                    "333",
+                    "Test Cuber",
+                    "2020TEST01",
+                    "a",
+                    "",
+                    "",
+                    "Netherlands",
+                ],
+                [
+                    "2",
+                    "1",
+                    "-1",
+                    "-1",
+                    "DnfOnlyOpen2026",
+                    "f",
+                    "333",
+                    "Tie Cuber",
+                    "2020TIEE01",
+                    "a",
+                    "",
+                    "",
+                    "Netherlands",
+                ],
+            ],
+        ),
+        "result_attempts": _tsv(
+            ["value", "attempt_number", "result_id"],
+            [
+                ["900", "1", "1"],
+                ["1000", "2", "1"],
+                ["1100", "3", "1"],
+                ["1200", "4", "1"],
+                ["1300", "5", "1"],
+                ["-1", "1", "2"],
+                ["-2", "2", "2"],
+                ["0", "3", "2"],
             ],
         ),
         "events": _tsv(["id", "name", "format"], [["333", "3x3x3 Cube", "time"]]),
@@ -105,12 +167,14 @@ def test_tsv_manifest_keeps_every_export_table_and_validates_projection_inputs()
     archive, manifest = inspect_fixture()
     with archive:
         assert {table.name for table in manifest.tables} == {
+            "competitions",
             "continents",
             "countries",
             "events",
             "persons",
             "ranks_average",
             "ranks_single",
+            "result_attempts",
             "results",
         }
     assert manifest.export_generated_at == datetime(2026, 8, 30, 11, 7, 14, tzinfo=UTC)
@@ -287,22 +351,30 @@ def test_refresh_discovers_streams_and_logs_the_current_v2_tsv_zip(monkeypatch):
             return Response()
 
     loaded = {}
+    pipeline_events = []
 
     def load(archive, manifest):
+        pipeline_events.append("load")
         loaded["tables"] = {table.name for table in manifest.tables}
         return {table.name: 1 for table in manifest.tables}
 
     def activate(manifest):
+        pipeline_events.append("activate")
         return SimpleNamespace(
             source_filename=manifest.source_filename,
             source_version=manifest.source_version,
         )
+
+    def rebuild_historical():
+        pipeline_events.append("rebuild_historical")
+        return 5, 1, 6
 
     monkeypatch.setattr(baseline_export.httpx, "Client", Client)
     monkeypatch.setattr(baseline_export, "_require_postgresql", lambda: None)
     monkeypatch.setattr(baseline_export, "_export_refresh_lock", nullcontext)
     monkeypatch.setattr(baseline_export, "load_tsv_archive_into_staging", load)
     monkeypatch.setattr(baseline_export, "activate_staged_export", activate)
+    monkeypatch.setattr(baseline_export, "rebuild_historical_results", rebuild_historical)
     monkeypatch.setattr(
         baseline_export.logger,
         "info",
@@ -317,6 +389,7 @@ def test_refresh_discovers_streams_and_logs_the_current_v2_tsv_zip(monkeypatch):
     assert ("stream", "GET", "https://exports.example.test/current.tsv.zip") in calls
     assert not any("sql" in str(call) for call in calls)
     assert "events" in loaded["tables"]
+    assert pipeline_events == ["load", "activate", "rebuild_historical"]
     assert metadata.source_filename == "WCA_export_v2_test.tsv.zip"
     assert any(message.startswith("wca_export_refresh_started") for message in logs)
     assert any(message.startswith("wca_export_download_completed") for message in logs)
