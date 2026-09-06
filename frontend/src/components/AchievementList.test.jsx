@@ -9,7 +9,7 @@ afterEach(cleanup);
 
 const baseRecord = {
   id: 1,
-  achievement: { level: "WR" },
+  achievement: { level: "WR", holding: { shared_tie: false } },
   event: { id: "333", name: "3x3x3 Cube" },
   result: { kind: "single", formatted: "3.90", raw: 390 },
   competitor: {
@@ -40,8 +40,8 @@ it("renders only the requested compact row fields and the real event icon", () =
   const row = screen.getAllByRole("row")[0];
   expect(within(row).getByRole("img", { name: "3x3x3 Cube icon" }).getAttribute("src")).toBe("/event_icons/333.svg");
   expect(within(row).getByText("3.90")).toBeTruthy();
-  expect(within(row).getByText("sgl")).toBeTruthy();
-  expect(screen.getByText("avg")).toBeTruthy();
+  expect(within(row).getByText("Sgl")).toBeTruthy();
+  expect(screen.getByText("Avg")).toBeTruthy();
   expect(screen.queryByText("Single")).toBeNull();
   expect(screen.queryByText("Average")).toBeNull();
   expect(within(row).getByText("Test Cuber")).toBeTruthy();
@@ -105,4 +105,24 @@ it("renders Multi-Blind scores and times on separate lines without changing the 
   expect(result.children[0].textContent).toBe("13/13");
   expect(result.children[1].textContent).toBe("58:03");
   expect(result.textContent).toBe("13/1358:03");
+});
+
+it("shows Tied below the kind only when the API marks the holding as a shared tie", () => {
+  render(
+    <AchievementList
+      level="WR"
+      loading={false}
+      error=""
+      records={[
+        { ...baseRecord, achievement: { ...baseRecord.achievement, holding: { shared_tie: true } } },
+        { ...baseRecord, id: 2, result: { ...baseRecord.result, kind: "average" } },
+      ]}
+    />
+  );
+
+  const rows = screen.getAllByRole("row");
+  expect(within(rows[0]).getByText("Sgl")).toBeTruthy();
+  expect(within(rows[0]).getByText("Tied").classList.contains("tied-indicator")).toBe(true);
+  expect(within(rows[1]).getByText("Avg")).toBeTruthy();
+  expect(within(rows[1]).queryByText("Tied")).toBeNull();
 });

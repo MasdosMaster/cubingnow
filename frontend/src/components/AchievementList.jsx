@@ -18,7 +18,7 @@ const ROW_LIMITS = {
 };
 
 function resultKind(kind = "") {
-  return { single: "sgl", average: "avg" }[kind] || kind || "—";
+  return { single: "Sgl", average: "Avg" }[kind] || kind || "—";
 }
 
 function CompactResult({ eventId, value }) {
@@ -75,7 +75,10 @@ export function AchievementList({ level, records, loading, error }) {
                       <img alt={`${record.event.name} icon`} src={`/event_icons/${record.event.id}.svg`} />
                     </span>
                     <CompactResult eventId={record.event.id} value={record.result.formatted || record.result.raw} />
-                    <span className="result-kind" role="cell">{resultKind(record.result.kind)}</span>
+                    <span className="result-kind" role="cell">
+                      <span className="result-kind-label">{resultKind(record.result.kind)}</span>
+                      {record.achievement.holding?.shared_tie === true && <span className="tied-indicator">Tied</span>}
+                    </span>
                     <span className="record-competitor" role="cell">
                       <CountryFlag code={record.competitor.country_code} />
                       <span className="competitor-name">{record.competitor.name}</span>
