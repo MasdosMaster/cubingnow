@@ -190,7 +190,7 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 .compact-result { min-width: 0; overflow: hidden; font-size: 15px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .compact-result-multiblind { display: flex; overflow: visible; flex-direction: column; justify-content: center; line-height: 1.15; text-overflow: clip; white-space: nowrap; }
 .result-kind { display: flex; align-items: flex-start; justify-content: center; flex-direction: column; color: #6681bb; line-height: 1.15; white-space: nowrap; }
-.tied-indicator { display: inline-flex; align-items: center; align-self: flex-start; width: max-content; margin-top: 2px; padding: 1px 4px; border-radius: 3px; color: #fff; background: #f229d4; font-size: .78em; font-weight: 700; line-height: 1.15; }
+.tied-indicator { display: inline-flex; align-items: center; align-self: flex-start; width: max-content; margin-top: 2px; padding: 1px; border-radius: 3px; color: #fff; background: #f229d4; font-size: .78em; font-weight: 700; line-height: 1.15; }
 .record-competitor { display: flex; align-items: center; gap: 7px; min-width: 0; color: #254c9d; }
 .record-competitor .country-flag { width: 1.333em; height: 1em; flex: 0 0 auto; }
 .record-competitor .competitor-name { display: -webkit-box; min-width: 0; overflow: hidden; line-height: 1.25; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
