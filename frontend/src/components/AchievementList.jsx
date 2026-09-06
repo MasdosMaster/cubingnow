@@ -21,18 +21,30 @@ function resultKind(kind = "") {
   return { single: "Sgl", average: "Avg" }[kind] || kind || "—";
 }
 
-function CompactResult({ eventId, value, showTied }) {
+function CompactResult({ eventId, kind, tied, value }) {
   const displayValue = String(value ?? "—");
   const separator = displayValue.indexOf(" ");
   const score = separator === -1 ? displayValue : displayValue.slice(0, separator);
   const time = separator === -1 ? "" : displayValue.slice(separator + 1);
 
+  if (eventId === "333mbf") {
+    return (
+      <span className="compact-result-cell" role="cell">
+        <strong className="compact-result compact-result-multiblind">
+          <span>{score}</span>
+          {time && <span>{time}</span>}
+        </strong>
+      </span>
+    );
+  }
+
   return (
     <span className="compact-result-cell" role="cell">
-      {eventId === "333mbf"
-        ? <strong className="compact-result compact-result-multiblind"><span>{score}</span>{time && <span>{time}</span>}</strong>
-        : <strong className="compact-result">{displayValue}</strong>}
-      {showTied && <span className="tied-indicator">Tied</span>}
+      <strong className="compact-result">{displayValue}</strong>
+      <span className="compact-result-meta">
+        <span className="result-kind">{resultKind(kind)}</span>
+        {tied && <span className="tied-indicator">Tied</span>}
+      </span>
     </span>
   );
 }
@@ -73,12 +85,10 @@ export function AchievementList({ level, records, loading, error }) {
                     </span>
                     <CompactResult
                       eventId={record.event.id}
-                      showTied={record.achievement.holding?.shared_tie === false}
+                      kind={record.result.kind}
+                      tied={record.achievement.holding?.shared_tie === true}
                       value={record.result.formatted || record.result.raw}
                     />
-                    <span className="result-kind" role="cell">
-                      <span className="result-kind-label">{resultKind(record.result.kind)}</span>
-                    </span>
                     <span className="record-competitor" role="cell">
                       <CountryFlag code={record.competitor.country_code} />
                       <span className="competitor-name">{record.competitor.name}</span>

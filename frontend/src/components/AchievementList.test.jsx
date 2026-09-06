@@ -95,6 +95,7 @@ it("renders Multi-Blind scores and times on separate lines without changing the 
         ...baseRecord,
         event: { id: "333mbf", name: "3x3x3 Multi-Blind" },
         result: { ...baseRecord.result, formatted: "13/13 58:03" },
+        achievement: { ...baseRecord.achievement, holding: { shared_tie: true } },
       }]}
     />
   );
@@ -105,17 +106,19 @@ it("renders Multi-Blind scores and times on separate lines without changing the 
   expect(result.children[0].textContent).toBe("13/13");
   expect(result.children[1].textContent).toBe("58:03");
   expect(result.textContent).toBe("13/1358:03");
+  expect(screen.queryByText("Sgl")).toBeNull();
+  expect(screen.queryByText("Tied")).toBeNull();
 });
 
-it("shows Tied below the kind when a holding is marked as non-tied for the preview", () => {
+it("shows Tied in the result metadata only when the API marks the holding as a shared tie", () => {
   render(
     <AchievementList
       level="WR"
       loading={false}
       error=""
       records={[
-        { ...baseRecord, achievement: { ...baseRecord.achievement, holding: { shared_tie: false } } },
-        { ...baseRecord, id: 2, result: { ...baseRecord.result, kind: "average" }, achievement: { ...baseRecord.achievement, holding: { shared_tie: true } } },
+        { ...baseRecord, achievement: { ...baseRecord.achievement, holding: { shared_tie: true } } },
+        { ...baseRecord, id: 2, result: { ...baseRecord.result, kind: "average" } },
       ]}
     />
   );
@@ -123,7 +126,7 @@ it("shows Tied below the kind when a holding is marked as non-tied for the previ
   const rows = screen.getAllByRole("row");
   expect(within(rows[0]).getByText("Sgl")).toBeTruthy();
   expect(within(rows[0]).getByText("Tied").classList.contains("tied-indicator")).toBe(true);
-  expect(within(rows[0]).getByText("Tied").closest(".compact-result-cell")).toBeTruthy();
+  expect(within(rows[0]).getByText("Tied").closest(".compact-result-meta")).toBeTruthy();
   expect(within(rows[1]).getByText("Avg")).toBeTruthy();
   expect(within(rows[1]).queryByText("Tied")).toBeNull();
 });
