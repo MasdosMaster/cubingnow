@@ -1,3 +1,5 @@
+import re
+
 from rest_framework import serializers
 
 from apps.competitions.serializers import CompetitionSerializer
@@ -189,13 +191,43 @@ class RecordAchievementSerializer(serializers.Serializer):
     holding = RecordHoldingSerializer(source="*", read_only=True)
 
 
+TRAILING_NATIVE_NAME_PATTERN = re.compile(
+    r"^(?P<romanized>.+?)\s*\((?P<native>[^()]*)\)\s*$"
+)
+
+
+def split_competitor_name(name):
+    stripped_name = (name or "").strip()
+    match = TRAILING_NATIVE_NAME_PATTERN.match(stripped_name)
+    if not match:
+        return stripped_name, None
+
+    romanized_name = match.group("romanized").strip()
+    native_name = match.group("native").strip()
+    if not romanized_name or not native_name:
+        return stripped_name, None
+    return romanized_name, native_name
+
+
 class RecordCompetitorSerializer(serializers.Serializer):
     name = serializers.CharField(source="competitor_name", read_only=True)
+    romanized_name = serializers.SerializerMethodField()
+    native_name = serializers.SerializerMethodField()
     wca_id = NullableCharField(source="competitor_wca_id", read_only=True)
     country_code = NullableCharField(read_only=True)
     country_display_name = serializers.SerializerMethodField()
     country_wca_name = serializers.SerializerMethodField()
     continent = serializers.SerializerMethodField()
+
+    @staticmethod
+    def get_romanized_name(obj):
+        romanized_name, _native_name = split_competitor_name(obj.competitor_name)
+        return romanized_name
+
+    @staticmethod
+    def get_native_name(obj):
+        _romanized_name, native_name = split_competitor_name(obj.competitor_name)
+        return native_name
 
     @staticmethod
     def get_country_display_name(obj):

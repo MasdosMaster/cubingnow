@@ -14,6 +14,8 @@ const baseRecord = {
   result: { kind: "single", formatted: "3.90", raw: 390 },
   competitor: {
     name: "Test Cuber",
+    romanized_name: "Test Cuber",
+    native_name: null,
     country_code: "NL",
     continent: "Europe",
     wca_id: "2020TEST01",
@@ -52,6 +54,39 @@ it("renders only the requested compact row fields and the real event icon", () =
   expect(screen.queryByText("Test Open 2026")).toBeNull();
   expect(screen.queryByText("2020TEST01")).toBeNull();
   expect(screen.getByRole("link", { name: "Get notified" }).getAttribute("href")).toBe("/notificationsettings");
+});
+
+it("renders romanized and native names on separate lines without parentheses", () => {
+  render(<AchievementList level="WR" loading={false} error="" records={[{
+    ...baseRecord,
+    competitor: {
+      ...baseRecord.competitor,
+      name: "Max Kwok U Sam (郭愉琛)",
+      romanized_name: "Max Kwok U Sam",
+      native_name: "郭愉琛",
+    },
+  }]} />);
+
+  const name = document.querySelector(".competitor-name-with-native");
+  expect(name).toBeTruthy();
+  expect(within(name).getByText("Max Kwok U Sam")).toBeTruthy();
+  expect(within(name).getByText("郭愉琛")).toBeTruthy();
+  expect(screen.queryByText("Max Kwok U Sam (郭愉琛)")).toBeNull();
+});
+
+it("renders the romanized name normally when no native name exists", () => {
+  render(<AchievementList level="WR" loading={false} error="" records={[{
+    ...baseRecord,
+    competitor: {
+      ...baseRecord.competitor,
+      name: "Stanisław Snopczyk",
+      romanized_name: "Stanisław Snopczyk",
+      native_name: null,
+    },
+  }]} />);
+
+  expect(screen.getByText("Stanisław Snopczyk")).toBeTruthy();
+  expect(document.querySelector(".competitor-name-with-native")).toBeNull();
 });
 
 it("uses the competitor country flag for continental records", () => {

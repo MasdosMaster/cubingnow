@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import date, timedelta
+from types import SimpleNamespace
 
 import pytest
 from django.utils import timezone
@@ -14,6 +15,7 @@ from apps.records.models import (
     IngestionWorkerStatus,
     RecentRecordObservation,
 )
+from apps.records.serializers import RecordCompetitorSerializer
 from integrations.wca_live.ingestion import persist_record_candidate
 from integrations.wca_live.schemas import RecordCandidate
 
@@ -75,6 +77,8 @@ def test_records_endpoint_returns_normalized_record():
     }
     assert result["competitor"] == {
         "name": "Test Cuber",
+        "romanized_name": "Test Cuber",
+        "native_name": None,
         "wca_id": "2026TEST01",
         "country_code": "TW",
         "country_display_name": "Taiwan",
@@ -115,6 +119,29 @@ def test_records_endpoint_returns_normalized_record():
         "/api/records/?level=CR&include_history=true"
     ).json()["results"]
     assert history[0]["achievement"]["outcome"] == "broken"
+
+
+@pytest.mark.parametrize(
+    ("name", "romanized_name", "native_name"),
+    [
+        ("Max Kwok U Sam (郭愉琛)", "Max Kwok U Sam", "郭愉琛"),
+        ("Stanisław Snopczyk", "Stanisław Snopczyk", None),
+    ],
+)
+def test_record_competitor_serializer_exposes_split_names(
+    name, romanized_name, native_name
+):
+    competitor = SimpleNamespace(
+        competitor_name=name,
+        competitor_wca_id="2026TEST01",
+        country_code="NL",
+    )
+
+    payload = RecordCompetitorSerializer(competitor).data
+
+    assert payload["name"] == name
+    assert payload["romanized_name"] == romanized_name
+    assert payload["native_name"] == native_name
 
 
 @pytest.mark.django_db

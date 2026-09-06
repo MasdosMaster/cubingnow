@@ -49,6 +49,21 @@ function CompactResult({ eventId, kind, tied, value }) {
   );
 }
 
+function CompetitorName({ competitor }) {
+  const romanizedName = competitor.romanized_name || competitor.name;
+
+  if (competitor.native_name != null) {
+    return (
+      <span className="competitor-name competitor-name-with-native">
+        <span>{romanizedName}</span>
+        <span>{competitor.native_name}</span>
+      </span>
+    );
+  }
+
+  return <span className="competitor-name">{romanizedName}</span>;
+}
+
 function BellIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -91,7 +106,7 @@ export function AchievementList({ level, records, loading, error }) {
                     />
                     <span className="record-competitor" role="cell">
                       <CountryFlag code={record.competitor.country_code} />
-                      <span className="competitor-name">{record.competitor.name}</span>
+                      <CompetitorName competitor={record.competitor} />
                     </span>
                     <time className={`compact-detected-age${isRecentlyDetected(timestamp) ? " is-recent" : ""}`} dateTime={timestamp} role="cell" title={absoluteTime(timestamp)}>
                       {formatCompactDetectedAge(timestamp)}

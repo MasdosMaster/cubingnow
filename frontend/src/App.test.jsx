@@ -11,7 +11,7 @@ function record(id, level, name = `Cuber ${id}`) {
     achievement: { level },
     event: { id: "333", name: "3x3x3 Cube" },
     result: { kind: id % 2 ? "single" : "average", formatted: `${id}.00`, raw: id * 100 },
-    competitor: { name, country_code: "NL", continent: "Europe", wca_id: `2026TEST${id}` },
+    competitor: { name, romanized_name: name, native_name: null, country_code: "NL", continent: "Europe", wca_id: `2026TEST${id}` },
     competition: { name: "Test Open", wca_id: "TestOpen2026" },
     round: { id: "round-1", name: "Final" },
     timestamps: { entered_at: "2026-09-05T12:00:00Z", first_observed_at: "2026-09-05T12:00:01Z" },
