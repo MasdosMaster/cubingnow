@@ -194,7 +194,7 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 .result-kind { min-width: 0; color: #6681bb; line-height: 1.15; white-space: nowrap; }
 .tied-indicator { display: inline-flex; align-items: center; width: max-content; padding: 1px 2px; border-radius: 3px; color: #fff; background: #f229d4; font-size: .78em; font-weight: 700; line-height: 1.15; }
 .record-competitor { display: flex; align-items: center; gap: 7px; min-width: 0; color: #254c9d; }
-.record-competitor .country-flag { width: 1.333em; height: 1em; flex: 0 0 auto; }
+.record-competitor .country-flag { width: 1.333em; height: 1em; flex: 0 0 auto; font-size: 27px; }
 .record-competitor .competitor-name { display: -webkit-box; min-width: 0; overflow: hidden; line-height: 1.25; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .country-flag { flex: 0 0 auto; font-size: 20px; }
 .country-flag-rounded { border-radius: .35rem; }
@@ -408,6 +408,7 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
   .event-icon img { width: 24px; height: 24px; }
   .compact-result { font-size: 13px; }
   .record-competitor { gap: 5px; }
+  .record-competitor .country-flag { font-size: 24px; }
   .country-flag { font-size: 16px; }
   .compact-detected-age { font-size: 10px; }
   .competing-card { min-height: 410px; }
