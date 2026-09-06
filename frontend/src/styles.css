@@ -144,7 +144,7 @@ footer { width: min(896px, calc(100% - 48px)); margin: auto; padding: 20px 0; bo
 .header-inner.homepage-width,
 footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 .public-brand { color: #070b42; font-size: 28px; font-weight: 780; letter-spacing: -.04em; }
-.public-brand span { color: #087cf0; }
+.public-brand span { color: #7dd3fc; }
 .public-navigation { display: flex; align-items: center; justify-content: center; gap: clamp(18px, 2.6vw, 40px); min-width: 0; }
 .public-navigation .coming-soon > button,
 .public-debug-link { display: inline-flex; align-items: center; height: 52px; padding: 0 3px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: #3558a8; background: transparent; box-shadow: none; font-size: 15px; font-weight: 650; text-decoration: none; white-space: nowrap; cursor: pointer; }
@@ -154,7 +154,7 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 .public-debug-link:focus-visible { color: #087cf0; }
 .public-navigation .coming-soon > button:focus-visible,
 .public-debug-link:focus-visible { outline: 2px solid #38bdf8; outline-offset: 4px; }
-.public-navigation .coming-soon > button.active { color: #070b42; border-bottom-color: #087cf0; font-weight: 750; }
+.public-navigation .coming-soon > button.active { color: #070b42; border-bottom-color: #7dd3fc; font-weight: 750; }
 .coming-soon { position: relative; display: inline-flex; justify-content: center; }
 .coming-soon-tooltip { position: absolute; z-index: 20; top: calc(100% + 7px); left: 50%; width: max-content; max-width: 150px; padding: 5px 8px; border-radius: 6px; color: #fff; background: #172554; box-shadow: 0 4px 12px rgb(15 23 42 / .18); font-size: 10px; font-weight: 700; line-height: 1.2; pointer-events: none; opacity: 0; transform: translate(-50%, -2px); transition: opacity .1s, transform .1s; }
 .coming-soon:hover .coming-soon-tooltip,
