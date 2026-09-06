@@ -16,17 +16,23 @@ export function formatDetectedAge(detectedAt, now = new Date()) {
 }
 
 export function formatCompactDetectedAge(detectedAt, now = new Date()) {
-  const elapsedMinutes = Math.max(
+  const elapsedSeconds = Math.max(
     0,
-    Math.floor((now.getTime() - new Date(detectedAt).getTime()) / 60_000)
+    Math.floor((now.getTime() - new Date(detectedAt).getTime()) / 1_000)
   );
 
+  if (elapsedSeconds < 60) return `${elapsedSeconds}s ago`;
+
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
 
-  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  const elapsedHours = Math.floor(elapsedSeconds / 3_600);
   if (elapsedHours < 24) return `${elapsedHours}h ago`;
 
-  return `${Math.floor(elapsedHours / 24)}d ago`;
+  const elapsedDays = Math.floor(elapsedSeconds / 86_400);
+  if (elapsedDays < 7) return `${elapsedDays}d ago`;
+
+  return `${Math.floor(elapsedDays / 7)}w ago`;
 }
 
 export function isRecentlyDetected(detectedAt, now = new Date()) {
