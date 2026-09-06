@@ -28,3 +28,7 @@ export function formatCompactDetectedAge(detectedAt, now = new Date()) {
 
   return `${Math.floor(elapsedHours / 24)}d ago`;
 }
+
+export function isRecentlyDetected(detectedAt, now = new Date()) {
+  return now.getTime() - new Date(detectedAt).getTime() < 96 * 60 * 60 * 1000;
+}

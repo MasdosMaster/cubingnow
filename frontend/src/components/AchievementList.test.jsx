@@ -40,8 +40,8 @@ it("renders only the requested compact row fields and the real event icon", () =
   const row = screen.getAllByRole("row")[0];
   expect(within(row).getByRole("img", { name: "3x3x3 Cube icon" }).getAttribute("src")).toBe("/event_icons/333.svg");
   expect(within(row).getByText("3.90")).toBeTruthy();
-  expect(within(row).getByText("Sgl")).toBeTruthy();
-  expect(screen.getByText("Avg")).toBeTruthy();
+  expect(within(row).getByText("sgl")).toBeTruthy();
+  expect(screen.getByText("avg")).toBeTruthy();
   expect(screen.queryByText("Single")).toBeNull();
   expect(screen.queryByText("Average")).toBeNull();
   expect(within(row).getByText("Test Cuber")).toBeTruthy();
@@ -83,4 +83,26 @@ it("keeps Nepal's non-rectangular flag unrounded like CubingStats", () => {
   const flag = document.querySelector(".country-flag.fi.fi-np");
   expect(flag).toBeTruthy();
   expect(flag.classList.contains("country-flag-rounded")).toBe(false);
+});
+
+it("renders Multi-Blind scores and times on separate lines without changing the value", () => {
+  render(
+    <AchievementList
+      level="WR"
+      loading={false}
+      error=""
+      records={[{
+        ...baseRecord,
+        event: { id: "333mbf", name: "3x3x3 Multi-Blind" },
+        result: { ...baseRecord.result, formatted: "13/13 58:03" },
+      }]}
+    />
+  );
+
+  const result = document.querySelector(".compact-result-multiblind");
+  expect(result).toBeTruthy();
+  expect(result.children).toHaveLength(2);
+  expect(result.children[0].textContent).toBe("13/13");
+  expect(result.children[1].textContent).toBe("58:03");
+  expect(result.textContent).toBe("13/1358:03");
 });

@@ -183,19 +183,22 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 .notification-link svg { width: 19px; height: 19px; fill: currentColor; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .record-card-content { flex: 1; min-height: 0; padding: 6px 16px 0; }
 .compact-record-table { width: 100%; }
-.compact-record-row { display: grid; grid-template-columns: 32px minmax(58px, .62fr) minmax(64px, .72fr) minmax(80px, 1.65fr) auto; align-items: center; gap: 10px; min-height: 49px; border-bottom: 1px solid #e2e8f0; color: #10194c; font-size: 13px; }
+.compact-record-row { display: grid; grid-template-columns: 32px minmax(58px, max-content) minmax(29px, max-content) minmax(0, 1fr) max-content; align-items: center; column-gap: 8px; min-height: 49px; padding: 5px 0; border-bottom: 1px solid #e2e8f0; color: #10194c; font-size: 13px; }
 .compact-record-row:last-child { border-bottom: 0; }
 .event-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; }
 .event-icon img { display: block; width: 27px; height: 27px; opacity: .68; }
 .compact-result { min-width: 0; overflow: hidden; font-size: 15px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-.result-kind { overflow: hidden; color: #6681bb; text-overflow: ellipsis; white-space: nowrap; }
-.record-competitor { display: flex; align-items: center; gap: 9px; min-width: 0; color: #254c9d; }
-.record-competitor > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compact-result-multiblind { display: flex; overflow: visible; flex-direction: column; justify-content: center; line-height: 1.15; text-overflow: clip; white-space: nowrap; }
+.result-kind { color: #6681bb; white-space: nowrap; }
+.record-competitor { display: flex; align-items: center; gap: 7px; min-width: 0; color: #254c9d; }
+.record-competitor .country-flag { width: 1.333em; height: 1em; flex: 0 0 auto; }
+.record-competitor .competitor-name { display: -webkit-box; min-width: 0; overflow: hidden; line-height: 1.25; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .country-flag { flex: 0 0 auto; font-size: 20px; }
 .country-flag-rounded { border-radius: .35rem; }
 .record-country-detail,
 .competitor-country { display: flex !important; align-items: center; gap: 6px; }
-.compact-detected-age { color: #f22720; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.compact-detected-age { color: #64748b; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.compact-detected-age.is-recent { color: #f22720; }
 .record-card-error { margin: 7px 0; padding: 8px 10px; border-radius: 8px; color: #991b1b; background: #fee2e2; font-size: 11px; }
 .record-card-state { display: flex; min-height: 150px; margin: 0; padding: 32px 16px; align-items: center; justify-content: center; flex-direction: column; color: #64748b; text-align: center; }
 .record-card-state h3 { margin: 0 0 5px; color: inherit; font-size: 16px; }
@@ -235,7 +238,8 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 :root[data-theme="dark"] .event-icon img { filter: invert(1); opacity: .78; }
 :root[data-theme="dark"] .result-kind { color: #b9cbf5; }
 :root[data-theme="dark"] .record-competitor { color: #bfdbfe; }
-:root[data-theme="dark"] .compact-detected-age { color: #ff8880; }
+:root[data-theme="dark"] .compact-detected-age { color: #94a3b8; }
+:root[data-theme="dark"] .compact-detected-age.is-recent { color: #ff8880; }
 :root[data-theme="dark"] .record-card-state { color: #cbd5e1; }
 :root[data-theme="dark"] .record-card-footer { background: #29245f; }
 :root[data-theme="dark"] .card-footer-action > button { color: #7dd3fc; }
@@ -395,7 +399,7 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
   .notification-link { min-width: 104px; height: 38px; padding: 0 8px; font-size: 11px; }
   .notification-link svg { width: 16px; height: 16px; }
   .record-card-content { padding-right: 10px; padding-left: 10px; }
-  .compact-record-row { grid-template-columns: 27px minmax(56px, .55fr) 29px minmax(0, 1.75fr) 40px; gap: 7px; font-size: 11px; }
+  .compact-record-row { grid-template-columns: 27px minmax(52px, max-content) minmax(25px, max-content) minmax(0, 1fr) max-content; column-gap: 6px; font-size: 11px; }
   .event-icon,
   .event-icon img { width: 24px; height: 24px; }
   .compact-result { font-size: 13px; }

@@ -3,7 +3,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { formatCompactDetectedAge, formatDetectedAge } from "../utils/formatDetectedAge";
+import { formatCompactDetectedAge, formatDetectedAge, isRecentlyDetected } from "../utils/formatDetectedAge";
 import { RecordList } from "./RecordList";
 
 const now = new Date("2026-08-05T12:00:00Z");
@@ -30,6 +30,13 @@ describe("formatCompactDetectedAge", () => {
     ["2026-08-05T11:47:30Z", "12m ago"],
   ])("formats %s as %s", (detectedAt, expected) => {
     expect(formatCompactDetectedAge(detectedAt, now)).toBe(expected);
+  });
+});
+
+describe("isRecentlyDetected", () => {
+  it("treats timestamps less than 96 hours old as recent", () => {
+    expect(isRecentlyDetected("2026-08-01T12:00:01Z", now)).toBe(true);
+    expect(isRecentlyDetected("2026-08-01T12:00:00Z", now)).toBe(false);
   });
 });
 

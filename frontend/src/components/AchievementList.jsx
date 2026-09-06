@@ -1,4 +1,4 @@
-import { formatCompactDetectedAge } from "../utils/formatDetectedAge";
+import { formatCompactDetectedAge, isRecentlyDetected } from "../utils/formatDetectedAge";
 import { CountryFlag } from "./CountryFlag";
 
 function absoluteTime(value) {
@@ -18,7 +18,26 @@ const ROW_LIMITS = {
 };
 
 function resultKind(kind = "") {
-  return { single: "Sgl", average: "Avg" }[kind] || kind || "—";
+  return { single: "sgl", average: "avg" }[kind] || kind || "—";
+}
+
+function CompactResult({ eventId, value }) {
+  const displayValue = String(value ?? "—");
+
+  if (eventId !== "333mbf") {
+    return <strong className="compact-result" role="cell">{displayValue}</strong>;
+  }
+
+  const separator = displayValue.indexOf(" ");
+  const score = separator === -1 ? displayValue : displayValue.slice(0, separator);
+  const time = separator === -1 ? "" : displayValue.slice(separator + 1);
+
+  return (
+    <strong className="compact-result compact-result-multiblind" role="cell">
+      <span>{score}</span>
+      {time && <span>{time}</span>}
+    </strong>
+  );
 }
 
 function BellIcon() {
@@ -55,13 +74,13 @@ export function AchievementList({ level, records, loading, error }) {
                     <span className="event-icon" role="cell">
                       <img alt={`${record.event.name} icon`} src={`/event_icons/${record.event.id}.svg`} />
                     </span>
-                    <strong className="compact-result" role="cell">{record.result.formatted || record.result.raw}</strong>
+                    <CompactResult eventId={record.event.id} value={record.result.formatted || record.result.raw} />
                     <span className="result-kind" role="cell">{resultKind(record.result.kind)}</span>
                     <span className="record-competitor" role="cell">
                       <CountryFlag code={record.competitor.country_code} />
-                      <span>{record.competitor.name}</span>
+                      <span className="competitor-name">{record.competitor.name}</span>
                     </span>
-                    <time className="compact-detected-age" dateTime={timestamp} role="cell" title={absoluteTime(timestamp)}>
+                    <time className={`compact-detected-age${isRecentlyDetected(timestamp) ? " is-recent" : ""}`} dateTime={timestamp} role="cell" title={absoluteTime(timestamp)}>
                       {formatCompactDetectedAge(timestamp)}
                     </time>
                   </article>
