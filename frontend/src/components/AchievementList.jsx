@@ -21,22 +21,19 @@ function resultKind(kind = "") {
   return { single: "Sgl", average: "Avg" }[kind] || kind || "—";
 }
 
-function CompactResult({ eventId, value }) {
+function CompactResult({ eventId, value, showTied }) {
   const displayValue = String(value ?? "—");
-
-  if (eventId !== "333mbf") {
-    return <strong className="compact-result" role="cell">{displayValue}</strong>;
-  }
-
   const separator = displayValue.indexOf(" ");
   const score = separator === -1 ? displayValue : displayValue.slice(0, separator);
   const time = separator === -1 ? "" : displayValue.slice(separator + 1);
 
   return (
-    <strong className="compact-result compact-result-multiblind" role="cell">
-      <span>{score}</span>
-      {time && <span>{time}</span>}
-    </strong>
+    <span className="compact-result-cell" role="cell">
+      {eventId === "333mbf"
+        ? <strong className="compact-result compact-result-multiblind"><span>{score}</span>{time && <span>{time}</span>}</strong>
+        : <strong className="compact-result">{displayValue}</strong>}
+      {showTied && <span className="tied-indicator">Tied</span>}
+    </span>
   );
 }
 
@@ -74,7 +71,11 @@ export function AchievementList({ level, records, loading, error }) {
                     <span className="event-icon" role="cell">
                       <img alt={`${record.event.name} icon`} src={`/event_icons/${record.event.id}.svg`} />
                     </span>
-                    <CompactResult eventId={record.event.id} value={record.result.formatted || record.result.raw} />
+                    <CompactResult
+                      eventId={record.event.id}
+                      showTied={record.achievement.holding?.shared_tie === false}
+                      value={record.result.formatted || record.result.raw}
+                    />
                     <span className="result-kind" role="cell">
                       <span className="result-kind-label">{resultKind(record.result.kind)}</span>
                     </span>
@@ -83,8 +84,7 @@ export function AchievementList({ level, records, loading, error }) {
                       <span className="competitor-name">{record.competitor.name}</span>
                     </span>
                     <time className={`compact-detected-age${isRecentlyDetected(timestamp) ? " is-recent" : ""}`} dateTime={timestamp} role="cell" title={absoluteTime(timestamp)}>
-                      <span>{formatCompactDetectedAge(timestamp)}</span>
-                      {record.achievement.holding?.shared_tie === false && <span className="tied-indicator">Tied</span>}
+                      {formatCompactDetectedAge(timestamp)}
                     </time>
                   </article>
                 );

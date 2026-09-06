@@ -187,6 +187,7 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 .compact-record-row:last-child { border-bottom: 0; }
 .event-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; }
 .event-icon img { display: block; width: 27px; height: 27px; opacity: .68; }
+.compact-result-cell { display: flex; align-items: flex-start; flex-direction: column; min-width: 0; }
 .compact-result { min-width: 0; overflow: hidden; font-size: 15px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .compact-result-multiblind { display: flex; overflow: visible; flex-direction: column; justify-content: center; line-height: 1.15; text-overflow: clip; white-space: nowrap; }
 .result-kind { display: flex; align-items: flex-start; justify-content: center; flex-direction: column; color: #6681bb; line-height: 1.15; white-space: nowrap; }
@@ -198,7 +199,7 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 .country-flag-rounded { border-radius: .35rem; }
 .record-country-detail,
 .competitor-country { display: flex !important; align-items: center; gap: 6px; }
-.compact-detected-age { display: flex; align-items: flex-end; flex-direction: column; color: #64748b; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.compact-detected-age { color: #64748b; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .compact-detected-age.is-recent { color: #f22720; }
 .record-card-error { margin: 7px 0; padding: 8px 10px; border-radius: 8px; color: #991b1b; background: #fee2e2; font-size: 11px; }
 .record-card-state { display: flex; min-height: 150px; margin: 0; padding: 32px 16px; align-items: center; justify-content: center; flex-direction: column; color: #64748b; text-align: center; }

@@ -123,7 +123,7 @@ it("shows Tied below the kind when a holding is marked as non-tied for the previ
   const rows = screen.getAllByRole("row");
   expect(within(rows[0]).getByText("Sgl")).toBeTruthy();
   expect(within(rows[0]).getByText("Tied").classList.contains("tied-indicator")).toBe(true);
-  expect(within(rows[0]).getByText("Tied").closest("time").classList.contains("compact-detected-age")).toBe(true);
+  expect(within(rows[0]).getByText("Tied").closest(".compact-result-cell")).toBeTruthy();
   expect(within(rows[1]).getByText("Avg")).toBeTruthy();
   expect(within(rows[1]).queryByText("Tied")).toBeNull();
 });
