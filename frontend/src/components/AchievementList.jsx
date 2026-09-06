@@ -77,14 +77,14 @@ export function AchievementList({ level, records, loading, error }) {
                     <CompactResult eventId={record.event.id} value={record.result.formatted || record.result.raw} />
                     <span className="result-kind" role="cell">
                       <span className="result-kind-label">{resultKind(record.result.kind)}</span>
-                      {record.achievement.holding?.shared_tie === false && <span className="tied-indicator">Tied</span>}
                     </span>
                     <span className="record-competitor" role="cell">
                       <CountryFlag code={record.competitor.country_code} />
                       <span className="competitor-name">{record.competitor.name}</span>
                     </span>
                     <time className={`compact-detected-age${isRecentlyDetected(timestamp) ? " is-recent" : ""}`} dateTime={timestamp} role="cell" title={absoluteTime(timestamp)}>
-                      {formatCompactDetectedAge(timestamp)}
+                      <span>{formatCompactDetectedAge(timestamp)}</span>
+                      {record.achievement.holding?.shared_tie === false && <span className="tied-indicator">Tied</span>}
                     </time>
                   </article>
                 );
