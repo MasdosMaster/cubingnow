@@ -136,6 +136,10 @@ function HomePage() {
   return (
     <PublicPage home wide>
       <main className="homepage-main">
+        <section className="homepage-intro" aria-labelledby="homepage-intro-title">
+          <h1 id="homepage-intro-title">Live speedcubing, all in one place.</h1>
+          <p>CubingNow combines live competition data from the WCA, WCA Live, and CubingChina with official WCA data to bring you live results, records, rankings, and statistics for you and other cubers.</p>
+        </section>
         <div className="homepage-filter">
           <SearchIcon />
           <input
