@@ -195,7 +195,7 @@ footer.homepage-width { width: min(1608px, calc(100% - 64px)); }
 .tied-indicator { display: inline-flex; align-items: center; width: max-content; padding: 1px 2px; border-radius: 3px; color: #fff; background: #f229d4; font-size: .78em; font-weight: 700; line-height: 1.15; }
 .record-competitor { display: flex; align-items: center; gap: 7px; min-width: 0; color: #254c9d; }
 .record-competitor .country-flag { width: 1.333em; height: 1em; flex: 0 0 auto; font-size: 27px; }
-.record-competitor .competitor-name { display: -webkit-box; flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: 15px; line-height: 1.25; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.record-competitor .competitor-name { display: -webkit-box; flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: 14px; line-height: 1.25; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .record-competitor .competitor-name-with-native { display: flex; flex-direction: column; overflow-wrap: normal; }
 .record-competitor .competitor-name-with-native > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .country-flag { flex: 0 0 auto; font-size: 20px; }
