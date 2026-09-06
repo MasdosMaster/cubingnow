@@ -86,7 +86,7 @@ export function AchievementList({ level, records, loading, error }) {
                     <CompactResult
                       eventId={record.event.id}
                       kind={record.result.kind}
-                      tied={record.achievement.holding?.shared_tie === true}
+                      tied={record.achievement.holding?.shared_tie === false}
                       value={record.result.formatted || record.result.raw}
                     />
                     <span className="record-competitor" role="cell">
