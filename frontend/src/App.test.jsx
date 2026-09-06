@@ -53,6 +53,7 @@ describe("homepage", () => {
 
     expect(screen.getByRole("heading", { name: "Live speedcubing, all in one place." })).toBeTruthy();
     expect(screen.getByText("CubingNow combines live competition data from the WCA, WCA Live, and CubingChina with official WCA data to bring you live results, records, rankings, and statistics for you and other cubers.")).toBeTruthy();
+    expect(screen.getByLabelText("Beta notice").textContent).toBe("CubingNow is currently in beta. New features and data sources are being added regularly.");
 
     const world = await screen.findByRole("table", { name: "World Records" });
     const continental = await screen.findByRole("table", { name: "Continental Records" });
