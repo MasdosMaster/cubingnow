@@ -77,7 +77,7 @@ export function AchievementList({ level, records, loading, error }) {
                     <CompactResult eventId={record.event.id} value={record.result.formatted || record.result.raw} />
                     <span className="result-kind" role="cell">
                       <span className="result-kind-label">{resultKind(record.result.kind)}</span>
-                      {record.achievement.holding?.shared_tie === true && <span className="tied-indicator">Tied</span>}
+                      {record.achievement.holding?.shared_tie === false && <span className="tied-indicator">Tied</span>}
                     </span>
                     <span className="record-competitor" role="cell">
                       <CountryFlag code={record.competitor.country_code} />

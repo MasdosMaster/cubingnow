@@ -107,15 +107,15 @@ it("renders Multi-Blind scores and times on separate lines without changing the 
   expect(result.textContent).toBe("13/1358:03");
 });
 
-it("shows Tied below the kind only when the API marks the holding as a shared tie", () => {
+it("shows Tied below the kind when a holding is marked as non-tied for the preview", () => {
   render(
     <AchievementList
       level="WR"
       loading={false}
       error=""
       records={[
-        { ...baseRecord, achievement: { ...baseRecord.achievement, holding: { shared_tie: true } } },
-        { ...baseRecord, id: 2, result: { ...baseRecord.result, kind: "average" } },
+        { ...baseRecord, achievement: { ...baseRecord.achievement, holding: { shared_tie: false } } },
+        { ...baseRecord, id: 2, result: { ...baseRecord.result, kind: "average" }, achievement: { ...baseRecord.achievement, holding: { shared_tie: true } } },
       ]}
     />
   );
